@@ -2,20 +2,39 @@ import Link from "next/link";
 import { ImageOff, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { RecipeDetail } from "@/lib/queries";
+import { cn } from "@/lib/utils";
 
 /**
  * Global recipe card: image on the left (top on small screens), bold title,
  * short description, and pill badges for tags.
+ *
+ * `orientation="vertical"` forces an image-on-top layout — used in the
+ * dashboard's horizontally-scrolling hearted-tag rows.
  */
-export function RecipeCard({ recipe }: { recipe: RecipeDetail }) {
+export function RecipeCard({
+  recipe,
+  orientation = "responsive",
+}: {
+  recipe: RecipeDetail;
+  orientation?: "responsive" | "vertical";
+}) {
   const tags = recipe.tags.map((t) => t.tag);
+  const vertical = orientation === "vertical";
 
   return (
     <Link
       href={`/recipes/${recipe.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-colors hover:bg-accent/40 sm:flex-row"
+      className={cn(
+        "group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-colors hover:bg-accent/40",
+        !vertical && "sm:flex-row",
+      )}
     >
-      <div className="relative aspect-video w-full shrink-0 bg-muted sm:aspect-square sm:w-40">
+      <div
+        className={cn(
+          "relative aspect-video w-full shrink-0 bg-muted",
+          !vertical && "sm:aspect-square sm:w-40",
+        )}
+      >
         {recipe.imagePath ? (
           // eslint-disable-next-line @next/next/no-img-element -- runtime-uploaded files in /public, not statically known
           <img

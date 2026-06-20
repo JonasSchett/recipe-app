@@ -84,7 +84,10 @@ generated migration under `prisma/migrations/`.
 - ✅ Phase 4 — image upload (local file storage)
 - ✅ Phase 5 — UI: nav, recipe card, create/edit form, recipe/list/tags/account
   pages, login (Google + dev-only sign-in)
-- ⬜ Phase 6 — dashboard (hearted-tag sections, list, multi-filter)
+- ✅ Phase 6 — dashboard (hearted-tag sections, divider, filterable all-recipes list)
+
+All core phases (PLAN.md §7) are complete. Remaining work is the Post-Core
+enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL import.
 
 ## Auth & UI notes
 
@@ -96,5 +99,7 @@ generated migration under `prisma/migrations/`.
 - Recipe images render with plain `<img>` (not `next/image`) since uploads are
   runtime files, not statically known at build.
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
-- The `/recipes` list has basic search + pagination; full multi-tag/ingredient
-  filtering and hearted-tag dashboard sections are Phase 6.
+- The filterable list lives in `RecipeBrowser` (server) + `RecipeFilters`
+  (client, URL-driven: `?q=&tags=a,b&ingredients=c`), shared by `/` and
+  `/recipes`. The dashboard `/` adds hearted-tag sections above it; those rows
+  are independent of the filter (the filter only narrows the All Recipes list).
