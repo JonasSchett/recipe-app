@@ -1,8 +1,9 @@
-# Deploying to Unraid (recipes.schett.io)
+# Deploying
 
-The app runs as two containers (`db` + `app`) via `docker-compose.yml`. The app
-image is built in CI and pulled from GitHub Container Registry (GHCR); all
-secrets are read at runtime from `.env`, so nothing sensitive is in the image.
+Two containers (`db` + `app`) defined by `docker-compose.yml`. The `app` image
+is built by CI and pulled from GitHub Container Registry (GHCR). All secrets are
+read at runtime from `.env`, so nothing sensitive is baked into the image (the
+image can be — and is — public).
 
 ```
 browser ──https(443)──▶ Nginx Proxy Manager (*.schett.io cert) ──http──▶ NAS:3100 ──▶ app:3000
@@ -10,82 +11,84 @@ browser ──https(443)──▶ Nginx Proxy Manager (*.schett.io cert) ──h
                                                                                     db (internal)
 ```
 
-## 1. One-time: build the image (GHCR)
+The walkthrough below is concrete for `recipes.schett.io` on Unraid, but applies
+to any Docker host + HTTPS reverse proxy.
 
-Pushing to `main` triggers `.github/workflows/docker-publish.yml`, which builds
-and pushes `ghcr.io/<owner>/recipe-app:latest` (plus `:sha-…` and version tags).
-`GITHUB_TOKEN` is automatic — no extra secrets needed.
+## Prerequisites
 
-The repo must be named **`recipe-app`** for the image name to match the compose
-file (`ghcr.io/${GHCR_OWNER}/recipe-app`). The package is private by default;
-either make it public (Packages → Package settings → visibility) or log in on
-the NAS once (step 3).
+- A Docker host. On Unraid: install the **Docker Compose Manager** plugin
+  (Community Apps).
+- A reverse proxy terminating **HTTPS** with a valid cert — Google OAuth requires
+  https. We use Nginx Proxy Manager with the `*.schett.io` wildcard cert.
+- A hostname pointing at the host (e.g. `recipes.schett.io`). LAN-only is fine —
+  Google never connects to the app, it only redirects your browser.
+- A Google OAuth client (step 1).
 
-## 2. Google OAuth
+## 1. Google OAuth client
 
-Use a **separate OAuth client** (same Google Cloud project as Immich is fine):
-Credentials → Create OAuth client ID → Web application.
+In Google Cloud Console → Credentials → Create OAuth client ID → **Web
+application** (a dedicated client; the same project as other apps is fine):
 
 - **Authorized JavaScript origin:** `https://recipes.schett.io`
 - **Authorized redirect URI:** `https://recipes.schett.io/api/auth/callback/google`
 
-Keep the OAuth consent screen in **Testing** and add your Google account as a
-test user → only you can sign in. (Belt and braces: also set `AUTH_ALLOWED_EMAILS`
-in step 3.)
+Keep the consent screen in **Testing** and add your Google account as a test
+user, so only you can sign in. (Also set `AUTH_ALLOWED_EMAILS`, below.)
 
-## 3. On the NAS
+## 2. Environment values
 
-Get the repo and create `.env`:
-
-```bash
-mkdir -p /mnt/user/appdata/recipe-app
-cd /mnt/user/appdata/recipe-app
-git clone <your-repo-url> .
-cp .env.example .env
-```
-
-Edit `.env` for production:
+The stack reads a `.env`. Full reference: see the table in [README](./README.md#configuration-environment-variables).
+Minimum for production:
 
 ```dotenv
-AUTH_SECRET="<openssl rand -base64 32>"
-AUTH_URL="https://recipes.schett.io"
-NEXTAUTH_URL="https://recipes.schett.io"
-GOOGLE_CLIENT_ID="…"
-GOOGLE_CLIENT_SECRET="…"
-AUTH_ALLOWED_EMAILS="you@gmail.com"      # lock sign-in to just you
-GHCR_OWNER="your-github-username"        # lowercase
-IMAGE_TAG="latest"
-DATA_DIR="/mnt/user/appdata/recipe-app"
-POSTGRES_PASSWORD="<a strong password>"
+AUTH_SECRET=<openssl rand -base64 32>
+AUTH_URL=https://recipes.schett.io
+NEXTAUTH_URL=https://recipes.schett.io
+GOOGLE_CLIENT_ID=…
+GOOGLE_CLIENT_SECRET=…
+AUTH_ALLOWED_EMAILS=you@gmail.com        # lock sign-in to just you
+GHCR_OWNER=jonasschett                    # lowercase!
+IMAGE_TAG=latest
+DATA_DIR=/mnt/user/appdata/recipe-app
+POSTGRES_PASSWORD=<alphanumeric, no @ : / ? # %>
 ```
 
-If the GHCR package is private, log in once (needs a PAT with `read:packages`):
+Do **not** set `DATABASE_URL` — compose builds it from the `POSTGRES_*` values
+(host `db`, on the internal network).
 
-```bash
-echo <YOUR_PAT> | docker login ghcr.io -u <your-github-username> --password-stdin
-```
+## 3. Deploy with Docker Compose Manager (web UI)
 
-Start it (Docker Compose Manager → Add Stack pointing here, or CLI):
+Because the compose file uses the public GHCR image and absolute bind-mount
+paths, you don't need to clone the repo on the NAS.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+1. **Docker** tab → **Compose Manager** → **Add New Stack**, name it `recipe-app`.
+2. Edit the stack → **Compose File**: paste the contents of `docker-compose.yml`
+   from the repo (copy it from GitHub). You do **not** need `docker-compose.dev.yml`.
+3. Edit the stack's **`.env`**: paste the values from step 2.
+4. Click **Compose Up**.
 
-Migrations apply automatically on startup. Data persists in
+The image is public, so no login is needed. (If you make the package private,
+first run `echo <PAT_with_read:packages> | docker login ghcr.io -u <user> --password-stdin`.)
+
+Migrations apply automatically on startup. Watch the `app` container **Logs** for
+`All migrations have been successfully applied` and `✓ Ready`. Data persists in
 `DATA_DIR/postgres` and `DATA_DIR/uploads`.
+
+**CLI alternative:** clone into `DATA_DIR`, `cp .env.example .env`, fill it in,
+then `docker compose pull && docker compose up -d`.
 
 ## 4. Nginx Proxy Manager
 
 Add a Proxy Host:
 
 - **Domain:** `recipes.schett.io`
-- **Forward:** `http` → `<nas-ip>` → port `3100`
+- **Forward:** scheme `http` → `<nas-ip>` → port **`3100`** (host 3100 → container 3000)
 - **SSL:** `*.schett.io` cert, Force SSL, HTTP/2
-- Websockets support: on
+- **Websockets support:** on
 
-Point `recipes.schett.io` at the NAS the same way as your other local-only
-hosts (local DNS + your usual access restriction).
+Point `recipes.schett.io` at the NAS the same way as your other local-only hosts
+(local DNS + your usual access restriction). Note: Google sign-in only works
+through the https hostname — hitting `http://<nas-ip>:3100` directly fails OAuth.
 
 ## 5. First sign-in → make yourself admin
 
@@ -97,25 +100,28 @@ docker compose exec db psql -U recipe -d recipe \
   -c "UPDATE \"User\" SET role='ADMIN' WHERE email='you@gmail.com';"
 ```
 
+(In the Compose Manager, run this from the NAS console in the stack's project
+folder, or use the `db` container's console.)
+
 ## Updating after code changes
 
-1. Locally: make changes. If `prisma/schema.prisma` changed, run
+1. **Locally:** make changes. If `prisma/schema.prisma` changed, run
    `npm run db:migrate` to create a migration, then commit **including** the new
-   `prisma/migrations/…` files and push to `main`. CI rebuilds the image.
-2. On the NAS:
-   ```bash
-   cd /mnt/user/appdata/recipe-app
-   git pull            # only needed if compose/.env files changed
-   docker compose pull # fetch the new image
-   docker compose up -d
-   ```
-   Pending migrations apply automatically on startup; `postgres` and `uploads`
-   data are untouched.
+   `prisma/migrations/…` files and push to **`mainline`**. CI builds and pushes a
+   new `:latest` image (watch the Actions tab).
+2. **On the NAS:** in Docker Compose Manager, click the stack's **Update / pull**
+   action (circular-arrows icon) to fetch the new image and recreate the
+   container. A plain *Compose Up* reuses the old image, so use Update/pull.
+   - CLI equivalent: `docker compose pull && docker compose up -d`.
 
-Pin a specific build instead of `latest` by setting `IMAGE_TAG` (e.g. a
-`sha-abc1234` or `v1.2.0` tag) in `.env`.
+Pending migrations apply automatically on restart; `postgres` and `uploads` data
+are untouched. Pin a specific build by setting `IMAGE_TAG` (e.g. `sha-abc1234`).
 
 ## Backups
 
 Back up `DATA_DIR/postgres` and `DATA_DIR/uploads` (e.g. the Unraid Appdata
-Backup plugin), or `docker compose exec db pg_dump -U recipe recipe > dump.sql`.
+Backup plugin), or dump the database:
+
+```bash
+docker compose exec db pg_dump -U recipe recipe > recipe-backup.sql
+```

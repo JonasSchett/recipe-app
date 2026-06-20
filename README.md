@@ -13,16 +13,45 @@ recipes. See [`PLAN.md`](./PLAN.md) for the full implementation plan.
 
 ## Project status
 
-This is the **core scaffold** (Plan §7 Phase 1, plus the Prisma schema and
-Auth.js wiring). Implemented so far:
+All six core phases from [`PLAN.md`](./PLAN.md) §7 are complete:
 
-- Next.js app shell, Tailwind v4 + shadcn theme tokens
 - Full Prisma schema (Auth.js models + Recipe / Ingredient / Tag / join tables)
-- Auth.js config with the Google provider and `role` on the session
-- Dockerfile (standalone output) + `docker-compose.yml` (db + app, persistent
-  volumes for Postgres and uploads)
+  with role-based access (ADMIN / USER) and PUBLIC / PRIVATE visibility
+- Google sign-in (Auth.js v5, database sessions) with an optional email allowlist
+- CRUD server actions for recipes, tags, and ingredients (tags/ingredients are
+  created seamlessly by name)
+- Local image upload (validated, stored on disk, served from `/uploads`)
+- UI: nav, recipe cards, create/edit form, and a dashboard with hearted-tag
+  sections plus a multi-select tag/ingredient filter
+- Deployed via Docker: a GHCR image built by CI, run behind a reverse proxy —
+  see [`DEPLOY.md`](./DEPLOY.md)
 
-Still to come: recipe CRUD, image upload, UI components, and the dashboard.
+Remaining work is the Post-Core enhancements in PLAN.md §8 (image optimization,
+serving scaling, URL import).
+
+## Configuration (environment variables)
+
+Copy `.env.example` to `.env`. One file is read by both local dev (`npm run dev`)
+and the Docker stack; for the container, `docker-compose.yml` overrides
+`DATABASE_URL` and assembles it from the `POSTGRES_*` values (so you don't set
+`DATABASE_URL` in production).
+
+| Variable | Required | Used by | Notes |
+| --- | --- | --- | --- |
+| `AUTH_SECRET` | yes | both | Session/JWT signing. `openssl rand -base64 32`. |
+| `AUTH_URL` | yes | both | Public base URL. Dev: `http://localhost:3000`. Prod: `https://recipes.schett.io`. |
+| `NEXTAUTH_URL` | yes | both | Same value as `AUTH_URL` (legacy alias). |
+| `GOOGLE_CLIENT_ID` | prod | both | Google OAuth client ID. |
+| `GOOGLE_CLIENT_SECRET` | prod | both | Google OAuth client secret. |
+| `AUTH_ALLOWED_EMAILS` | optional | both | Comma-separated allowlist of emails that may sign in. Empty = anyone who passes Google. |
+| `DATABASE_URL` | dev only | `npm run dev` | Local Postgres URL. Ignored in the container (compose sets it). |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | prod | compose | DB credentials; compose builds the container `DATABASE_URL` from these. Keep the password alphanumeric (no `@ : / ? # %`). |
+| `GHCR_OWNER` | prod | compose | GitHub owner for the image path, **lowercase** (e.g. `jonasschett`). |
+| `IMAGE_TAG` | prod | compose | Image tag to run (default `latest`; pin to a `sha-…`/`vX.Y.Z` if desired). |
+| `DATA_DIR` | prod | compose | Host directory for persistent data (`postgres/` + `uploads/`). |
+
+> Locally you don't need Google credentials — the `/login` page has a dev-only
+> sign-in (disabled when `NODE_ENV=production`).
 
 ## Local development
 
@@ -49,11 +78,9 @@ Still to come: recipe CRUD, image upload, UI components, and the dashboard.
    ```
    App at http://localhost:3000.
 
-### Google OAuth
-
-Create an OAuth client in the Google Cloud Console and set the authorized
-redirect URI to `<AUTH_URL>/api/auth/callback/google`. Put the client id and
-secret in `.env`.
+At the login page, use **"Sign in as test user"** (the dev-only card) to get in
+without Google. Setting up real Google OAuth is only needed for production — see
+[`DEPLOY.md`](./DEPLOY.md).
 
 ## Production
 
