@@ -1,3 +1,12 @@
+# Production stack (e.g. Unraid). The app image is pulled from GitHub Container
+# Registry, built by .github/workflows/docker-publish.yml. All secrets are read
+# at runtime from .env — nothing sensitive is baked into the image.
+#
+# Deploy / update:
+#   docker compose pull && docker compose up -d
+#
+# For a LOCAL dev database instead, use: docker compose -f docker-compose.dev.yml up -d
+
 services:
   db:
     image: postgres:16-alpine
@@ -7,9 +16,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recipe}
       POSTGRES_DB: ${POSTGRES_DB:-recipe}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # Bind-mount to appdata so Unraid backups can see it.
+      - ${DATA_DIR:-/mnt/user/appdata/recipe-app}/postgres:/var/lib/postgresql/data
+    # Bound to localhost only: reachable on the host (handy for psql), never the LAN.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recipe} -d ${POSTGRES_DB:-recipe}"]
       interval: 5s
@@ -17,9 +28,7 @@ services:
       retries: 5
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/${GHCR_OWNER:-your-github-username}/recipe-app:${IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
       db:
@@ -27,21 +36,21 @@ services:
     environment:
       # Inside the compose network the database host is the `db` service.
       DATABASE_URL: postgresql://${POSTGRES_USER:-recipe}:${POSTGRES_PASSWORD:-recipe}@db:5432/${POSTGRES_DB:-recipe}?schema=public
+      # Public base URL served by your reverse proxy, e.g. https://recipes.schett.io
+      AUTH_URL: ${AUTH_URL}
+      NEXTAUTH_URL: ${AUTH_URL}
       AUTH_SECRET: ${AUTH_SECRET}
-      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      AUTH_TRUST_HOST: "true"
+      # Google OAuth — read at runtime, never baked into the image.
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      AUTH_TRUST_HOST: "true"
+      # Optional: only these comma-separated emails may sign in (empty = anyone).
+      AUTH_ALLOWED_EMAILS: ${AUTH_ALLOWED_EMAILS:-}
+    # Host 3100 -> container 3000 (3000 is taken by Immich). Point NPM at :3100.
     ports:
-      - "3000:3000"
+      - "3100:3000"
     volumes:
-      # Persist uploaded recipe images across container restarts.
-      - uploads:/app/public/uploads
+      # Persist uploaded recipe images across restarts/updates.
+      - ${DATA_DIR:-/mnt/user/appdata/recipe-app}/uploads:/app/public/uploads
     # Apply pending migrations, then start the standalone server.
     command: sh -c "npx prisma migrate deploy && node server.js"
-
-volumes:
-  postgres-data:
-  uploads:

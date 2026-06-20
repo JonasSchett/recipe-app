@@ -16,9 +16,15 @@ npm run build        # prisma generate + next build (also the typecheck gate)
 npm run lint         # eslint
 npm run db:migrate   # create + apply a dev migration (needs the db up)
 npm run db:studio    # browse data
-docker compose up -d db   # start just Postgres for local dev
-docker compose up -d --build   # full stack (app + db)
+docker compose -f docker-compose.dev.yml up -d   # local Postgres for dev
 ```
+
+Deployment: `docker-compose.yml` is the **production** stack (pulls the GHCR
+image, port 3100, appdata bind-mounts) — see `DEPLOY.md`. Don't use it for local
+dev; use `docker-compose.dev.yml` + `npm run dev`. The app image is built/pushed
+by `.github/workflows/docker-publish.yml`. Secrets (Google, `AUTH_SECRET`) are
+read at runtime from `.env`, never baked in. `AUTH_ALLOWED_EMAILS` (optional,
+comma-separated) restricts who may sign in via Google.
 
 After changing `prisma/schema.prisma`, run `npm run db:migrate` and commit the
 generated migration under `prisma/migrations/`.

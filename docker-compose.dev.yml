@@ -1,0 +1,22 @@
+# Local development database only. Run the app itself with `npm run dev`.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   npm run dev
+#
+# Uses a named volume (portable across machines) and exposes 5432 so the dev
+# server on the host can connect via the localhost DATABASE_URL in .env.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: recipe
+      POSTGRES_PASSWORD: recipe
+      POSTGRES_DB: recipe
+    ports:
+      - "5432:5432"
+    volumes:
+      - recipe-dev-db:/var/lib/postgresql/data
+
+volumes:
+  recipe-dev-db:

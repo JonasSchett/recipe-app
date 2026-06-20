@@ -35,9 +35,9 @@ Still to come: recipe CRUD, image upload, UI components, and the dashboard.
    cp .env.example .env
    # generate a secret:  openssl rand -base64 32
    ```
-3. Start a database (the compose `db` service is enough):
+3. Start a local database:
    ```bash
-   docker compose up -d db
+   docker compose -f docker-compose.dev.yml up -d
    ```
 4. Apply the schema:
    ```bash
@@ -55,16 +55,19 @@ Create an OAuth client in the Google Cloud Console and set the authorized
 redirect URI to `<AUTH_URL>/api/auth/callback/google`. Put the client id and
 secret in `.env`.
 
-## Production (Docker Compose)
+## Production
+
+The production stack (`docker-compose.yml`) pulls a prebuilt image from GitHub
+Container Registry and runs behind a reverse proxy. See **[DEPLOY.md](./DEPLOY.md)**
+for the full Unraid + Nginx Proxy Manager walkthrough. In short:
 
 ```bash
-cp .env.example .env   # set AUTH_SECRET, Google creds, strong POSTGRES_PASSWORD
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
-The app applies pending Prisma migrations on start, then serves on port 3000.
-Uploaded images persist in the `uploads` volume; database data in
-`postgres-data`.
+The app applies pending Prisma migrations on start. Data persists under
+`DATA_DIR` (`postgres/` and `uploads/`). Images are built and pushed by
+`.github/workflows/docker-publish.yml`.
 
 ## Useful scripts
 
