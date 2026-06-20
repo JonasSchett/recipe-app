@@ -82,5 +82,19 @@ generated migration under `prisma/migrations/`.
 - ✅ Phase 2 — Prisma schema, initial migration, NextAuth + Google
 - ✅ Phase 3 — CRUD Server Actions for Recipes, Tags, Ingredients
 - ✅ Phase 4 — image upload (local file storage)
-- ⬜ Phase 5 — UI components (Nav, Recipe Card, Forms)
+- ✅ Phase 5 — UI: nav, recipe card, create/edit form, recipe/list/tags/account
+  pages, login (Google + dev-only sign-in)
 - ⬜ Phase 6 — dashboard (hearted-tag sections, list, multi-filter)
+
+## Auth & UI notes
+
+- **Local sign-in:** Google needs real credentials, so the `/login` page also
+  has a **dev-only** sign-in (`src/lib/actions/dev-auth.ts`) that creates a real
+  DB Session + sets the `authjs.session-token` cookie. Gated to non-production.
+- shadcn primitives in `src/components/ui` are hand-written (no Radix) to keep
+  deps light. The mobile nav uses a `useState` toggle, not Radix Sheet.
+- Recipe images render with plain `<img>` (not `next/image`) since uploads are
+  runtime files, not statically known at build.
+- Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
+- The `/recipes` list has basic search + pagination; full multi-tag/ingredient
+  filtering and hearted-tag dashboard sections are Phase 6.
