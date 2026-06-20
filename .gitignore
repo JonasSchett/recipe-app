@@ -1,0 +1,38 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# prisma generated client (regenerated on install/build)
+/src/generated
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files (keep .env.example)
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# uploaded recipe images (runtime user content)
+/public/uploads/recipes/*
+!/public/uploads/recipes/.gitkeep
+
+# docker volumes
+/.postgres-data
