@@ -13,6 +13,7 @@ import {
   resolveIngredients,
   resolveTagIds,
 } from "@/lib/actions/_shared";
+import { deleteRecipeImage } from "@/lib/storage";
 
 /** Create a recipe owned by the current user. */
 export async function createRecipe(input: RecipeInput) {
@@ -48,7 +49,7 @@ export async function updateRecipe(id: string, input: RecipeInput) {
 
   const existing = await prisma.recipe.findUnique({
     where: { id },
-    select: { id: true, authorId: true },
+    select: { id: true, authorId: true, imagePath: true },
   });
   if (!existing) throw new Error("Recipe not found.");
   assertCanModifyRecipe(user, existing);
@@ -73,6 +74,13 @@ export async function updateRecipe(id: string, input: RecipeInput) {
     });
   });
 
+  // After the DB update succeeds, remove the previous image if it was replaced
+  // or cleared (file deletion can't participate in the transaction).
+  const newImagePath = data.imagePath ?? null;
+  if (existing.imagePath && existing.imagePath !== newImagePath) {
+    await deleteRecipeImage(existing.imagePath);
+  }
+
   revalidatePath("/");
   revalidatePath(`/recipes/${id}`);
   return { id };
@@ -83,12 +91,13 @@ export async function deleteRecipe(id: string) {
   const user = await requireUser();
   const existing = await prisma.recipe.findUnique({
     where: { id },
-    select: { id: true, authorId: true },
+    select: { id: true, authorId: true, imagePath: true },
   });
   if (!existing) throw new Error("Recipe not found.");
   assertCanModifyRecipe(user, existing);
 
   await prisma.recipe.delete({ where: { id } });
+  await deleteRecipeImage(existing.imagePath);
   revalidatePath("/");
   return { id };
 }

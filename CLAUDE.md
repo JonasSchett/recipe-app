@@ -67,9 +67,12 @@ generated migration under `prisma/migrations/`.
 
 - Server Action and query modules import `prisma` — never import them into a
   Client Component.
-- Recipe images: store the path in `Recipe.imagePath`; files go under
-  `public/uploads/recipes/` (a persistent Docker volume). Actual upload handling
-  is Phase 4 — actions currently accept a pre-resolved `imagePath`.
+- Recipe images: `src/lib/storage.ts` validates + writes files under
+  `public/uploads/recipes/` (a persistent Docker volume) and returns a public
+  `/uploads/recipes/<uuid>.<ext>` path. The `uploadRecipeImage` Server Action
+  (`src/lib/actions/images.ts`) wraps it; the form uploads first, then passes the
+  returned path to `createRecipe`/`updateRecipe` as `imagePath`. Update/delete
+  clean up the previous file. Allowed: jpeg/png/webp/gif, max 5 MB.
 - `.env` is git-ignored; `.env.example` is the source of truth for required vars
   (`DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`).
 
@@ -77,7 +80,7 @@ generated migration under `prisma/migrations/`.
 
 - ✅ Phase 1 — scaffold, Tailwind/shadcn, Docker + Postgres
 - ✅ Phase 2 — Prisma schema, initial migration, NextAuth + Google
-- 🔨 Phase 3 — CRUD Server Actions for Recipes, Tags, Ingredients
-- ⬜ Phase 4 — image upload (local file storage)
+- ✅ Phase 3 — CRUD Server Actions for Recipes, Tags, Ingredients
+- ✅ Phase 4 — image upload (local file storage)
 - ⬜ Phase 5 — UI components (Nav, Recipe Card, Forms)
 - ⬜ Phase 6 — dashboard (hearted-tag sections, list, multi-filter)
