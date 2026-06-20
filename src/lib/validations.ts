@@ -1,0 +1,46 @@
+import { z } from "zod";
+
+/** A single ingredient line within a recipe form. */
+export const ingredientInputSchema = z.object({
+  name: z.string().trim().min(1, "Ingredient name is required").max(100),
+  // Quantity is optional ("a pinch of salt" has none) and supports scaling later.
+  quantity: z.number().positive().max(100000).nullish(),
+  unit: z.string().trim().max(30).nullish(),
+});
+
+export type IngredientInput = z.infer<typeof ingredientInputSchema>;
+
+export const visibilitySchema = z.enum(["PRIVATE", "PUBLIC"]);
+
+/** Payload for creating or editing a recipe. */
+export const recipeInputSchema = z.object({
+  title: z.string().trim().min(1, "Title is required").max(200),
+  description: z.string().trim().max(2000).nullish(),
+  instructions: z.string().trim().min(1, "Instructions are required").max(20000),
+  visibility: visibilitySchema.default("PRIVATE"),
+  // The image is uploaded separately (Phase 4); actions take a resolved path.
+  imagePath: z.string().trim().max(500).nullish(),
+  ingredients: z.array(ingredientInputSchema).max(100).default([]),
+  tags: z.array(z.string().trim().min(1).max(50)).max(50).default([]),
+});
+
+export type RecipeInput = z.infer<typeof recipeInputSchema>;
+
+/** Filters for the paginated "all recipes" list. */
+export const recipeFilterSchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  // Multiple tags/ingredients narrow with AND semantics (must match all).
+  tagIds: z.array(z.string()).max(50).default([]),
+  ingredientIds: z.array(z.string()).max(50).default([]),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export type RecipeFilter = z.infer<typeof recipeFilterSchema>;
+
+export const tagNameSchema = z.string().trim().min(1, "Tag name is required").max(50);
+export const ingredientNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Ingredient name is required")
+  .max(100);
