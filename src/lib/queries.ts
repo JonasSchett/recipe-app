@@ -47,6 +47,35 @@ export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
               OR: [
                 { title: { contains: search, mode: "insensitive" as const } },
                 { description: { contains: search, mode: "insensitive" as const } },
+                // Cross-lingual: match any localized ingredient/tag alias. Since
+                // each entity carries both its English and German names,
+                // searching "Onion" finds a recipe that stored "Zwiebel".
+                {
+                  ingredients: {
+                    some: {
+                      ingredient: {
+                        names: {
+                          some: {
+                            normalized: { contains: search.toLowerCase() },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  tags: {
+                    some: {
+                      tag: {
+                        names: {
+                          some: {
+                            normalized: { contains: search.toLowerCase() },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               ],
             },
           ]

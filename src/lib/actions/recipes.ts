@@ -11,7 +11,7 @@ import {
 import {
   assertCanModifyRecipe,
   resolveIngredients,
-  resolveTagIds,
+  resolveTags,
 } from "@/lib/actions/_shared";
 import { deleteRecipeImage } from "@/lib/storage";
 
@@ -21,7 +21,7 @@ export async function createRecipe(input: RecipeInput) {
   const data = recipeInputSchema.parse(input);
 
   const recipe = await prisma.$transaction(async (tx) => {
-    const tagIds = await resolveTagIds(tx, data.tags);
+    const tags = await resolveTags(tx, data.tags);
     const ingredients = await resolveIngredients(tx, data.ingredients);
     return tx.recipe.create({
       data: {
@@ -34,7 +34,9 @@ export async function createRecipe(input: RecipeInput) {
         images: {
           create: data.imagePaths.map((path, position) => ({ path, position })),
         },
-        tags: { create: tagIds.map((tagId) => ({ tagId })) },
+        tags: {
+          create: tags.map(({ tagId, displayName }) => ({ tagId, displayName })),
+        },
         ingredients: { create: ingredients },
       },
       select: { id: true },
@@ -62,7 +64,7 @@ export async function updateRecipe(id: string, input: RecipeInput) {
   assertCanModifyRecipe(user, existing);
 
   await prisma.$transaction(async (tx) => {
-    const tagIds = await resolveTagIds(tx, data.tags);
+    const tags = await resolveTags(tx, data.tags);
     const ingredients = await resolveIngredients(tx, data.ingredients);
     // Replace the join rows (and image rows) wholesale, then update scalars.
     await tx.recipeTag.deleteMany({ where: { recipeId: id } });
@@ -78,7 +80,9 @@ export async function updateRecipe(id: string, input: RecipeInput) {
         images: {
           create: data.imagePaths.map((path, position) => ({ path, position })),
         },
-        tags: { create: tagIds.map((tagId) => ({ tagId })) },
+        tags: {
+          create: tags.map(({ tagId, displayName }) => ({ tagId, displayName })),
+        },
         ingredients: { create: ingredients },
       },
     });

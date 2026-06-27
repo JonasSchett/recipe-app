@@ -38,9 +38,9 @@ export default async function RecipePage({
         </p>
         {recipe.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {recipe.tags.map(({ tag }) => (
+            {recipe.tags.map(({ tag, displayName }) => (
               <Badge key={tag.id} variant="outline">
-                {tag.name}
+                {displayName ?? tag.name}
               </Badge>
             ))}
           </div>
@@ -55,12 +55,12 @@ export default async function RecipePage({
         <section className="flex flex-col gap-2">
           <h2 className="text-xl font-semibold">Ingredients</h2>
           <ul className="flex flex-col gap-1">
-            {recipe.ingredients.map(({ ingredient, quantity, unit }) => (
+            {recipe.ingredients.map(({ ingredient, displayName, quantity, unit }) => (
               <li key={ingredient.id} className="flex gap-2 text-sm">
                 <span className="font-medium">
                   {[quantity ?? "", unit ?? ""].filter(Boolean).join(" ")}
                 </span>
-                <span>{ingredient.name}</span>
+                <span>{displayName ?? ingredient.name}</span>
               </li>
             ))}
           </ul>

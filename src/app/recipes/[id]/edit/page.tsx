@@ -30,12 +30,14 @@ export default async function EditRecipePage({
           instructions: recipe.instructions,
           visibility: recipe.visibility,
           imagePaths: recipe.images.map((img) => img.path),
-          ingredients: recipe.ingredients.map(({ ingredient, quantity, unit }) => ({
-            name: ingredient.name,
-            quantity,
-            unit,
-          })),
-          tags: recipe.tags.map(({ tag }) => tag.name),
+          ingredients: recipe.ingredients.map(
+            ({ ingredient, displayName, quantity, unit }) => ({
+              name: displayName ?? ingredient.name,
+              quantity,
+              unit,
+            }),
+          ),
+          tags: recipe.tags.map(({ tag, displayName }) => displayName ?? tag.name),
         }}
       />
     </div>

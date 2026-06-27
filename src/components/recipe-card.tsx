@@ -18,7 +18,10 @@ export function RecipeCard({
   recipe: RecipeDetail;
   orientation?: "responsive" | "vertical";
 }) {
-  const tags = recipe.tags.map((t) => t.tag);
+  const tags = recipe.tags.map((t) => ({
+    id: t.tag.id,
+    label: t.displayName ?? t.tag.name,
+  }));
   const vertical = orientation === "vertical";
   const heroImage = recipe.images[0]?.path ?? null;
 
@@ -66,7 +69,7 @@ export function RecipeCard({
           <div className="mt-auto flex flex-wrap gap-1 pt-1">
             {tags.slice(0, 4).map((tag) => (
               <Badge key={tag.id} variant="secondary">
-                {tag.name}
+                {tag.label}
               </Badge>
             ))}
             {tags.length > 4 && (

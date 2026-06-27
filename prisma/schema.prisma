@@ -115,22 +115,58 @@ model RecipeImage {
   @@index([recipeId])
 }
 
+// `name` is the English canonical label (the stable identity). Localized
+// surface forms (e.g. German "Zwiebel") live in IngredientName and all point
+// back here, so one entity unifies every language.
 model Ingredient {
   id      String             @id @default(cuid())
   name    String             @unique
+  names   IngredientName[]
   recipes RecipeIngredient[]
+}
+
+// A localized/alternate surface form for an ingredient. `normalized` is the
+// lowercased lookup key and is globally unique: a given surface string maps to
+// exactly one ingredient.
+model IngredientName {
+  id           String @id @default(cuid())
+  ingredientId String
+  name         String
+  normalized   String @unique
+  locale       String
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
 }
 
 model Tag {
   id        String           @id @default(cuid())
   name      String           @unique
+  names     TagName[]
   recipes   RecipeTag[]
   heartedBy UserHeartedTag[]
+}
+
+// Localized/alternate surface form for a tag (see IngredientName).
+model TagName {
+  id         String @id @default(cuid())
+  tagId      String
+  name       String
+  normalized String @unique
+  locale     String
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([tagId])
 }
 
 model RecipeIngredient {
   recipeId     String
   ingredientId String
+  // The exact surface form typed on this recipe (e.g. "Zwiebel"). Falls back to
+  // the ingredient's canonical English `name` when null.
+  displayName  String?
   quantity     Float?
   unit         String?
 
@@ -142,8 +178,11 @@ model RecipeIngredient {
 }
 
 model RecipeTag {
-  recipeId String
-  tagId    String
+  recipeId    String
+  tagId       String
+  // The exact surface form typed on this recipe; falls back to the tag's
+  // canonical English `name` when null.
+  displayName String?
 
   recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
   tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
