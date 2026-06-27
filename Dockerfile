@@ -32,7 +32,8 @@ RUN npm ci --omit=dev
 
 # ---- Runner -----------------------------------------------------------------
 FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl
+# su-exec lets the root entrypoint drop privileges after fixing volume perms.
+RUN apk add --no-cache openssl su-exec
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -51,12 +52,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 
-# Writable directory for uploaded recipe images (mounted as a volume).
+# Writable directory for uploaded recipe images (mounted as a volume). The
+# entrypoint re-applies this at runtime so a bind-mounted host dir works too.
 RUN mkdir -p ./public/uploads/recipes && chown -R nextjs:nodejs ./public/uploads
 
-USER nextjs
+# Fixes uploads-volume ownership as root, then drops to nextjs via su-exec.
+COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# Intentionally NOT switching to USER nextjs: the entrypoint starts as root to
+# chown the bind-mounted volume, then drops privileges itself.
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]
