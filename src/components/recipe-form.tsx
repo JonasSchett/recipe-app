@@ -8,6 +8,7 @@ import {
   ImagePlus,
   Plus,
   ScanText,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { createRecipe, updateRecipe } from "@/lib/actions/recipes";
 import { discardRecipeImage, uploadRecipeImage } from "@/lib/actions/images";
 import { extractTextFromRecipeImage } from "@/lib/actions/ocr";
+import { extractEntitiesFromText } from "@/lib/actions/extract";
 
 type IngredientRow = { name: string; quantity: string; unit: string };
 
@@ -41,6 +43,14 @@ const EMPTY: RecipeFormInitial = {
   ingredients: [],
   tags: [],
 };
+
+/** Tidy a raw text selection into a candidate ingredient/tag name. */
+function cleanSelectedText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+}
 
 export function RecipeForm({
   mode,
@@ -75,6 +85,9 @@ export function RecipeForm({
   const initialImagePaths = useRef(new Set(initial.imagePaths));
   const [imageBusy, setImageBusy] = useState(false);
   const [ocrBusyPath, setOcrBusyPath] = useState<string | null>(null);
+  const [detectBusy, setDetectBusy] = useState(false);
+  // Current text selection inside the instructions field (for quick-add).
+  const [selection, setSelection] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -143,6 +156,29 @@ export function RecipeForm({
     }
   }
 
+  // Add detected ingredient/tag names that aren't already present (case-
+  // insensitive). Suggestions only — the user can edit or remove them.
+  function mergeDetected(found: { ingredients: string[]; tags: string[] }) {
+    if (found.ingredients.length > 0) {
+      setIngredients((rows) => {
+        const have = new Set(
+          rows.map((r) => r.name.trim().toLowerCase()).filter(Boolean),
+        );
+        const additions = found.ingredients
+          .filter((name) => !have.has(name.toLowerCase()))
+          .map((name) => ({ name, quantity: "", unit: "" }));
+        return additions.length ? [...rows, ...additions] : rows;
+      });
+    }
+    if (found.tags.length > 0) {
+      setTags((prev) => {
+        const have = new Set(prev.map((t) => t.toLowerCase()));
+        const additions = found.tags.filter((t) => !have.has(t.toLowerCase()));
+        return additions.length ? [...prev, ...additions] : prev;
+      });
+    }
+  }
+
   async function runOcr(path: string) {
     setError(null);
     setOcrBusyPath(path);
@@ -156,10 +192,63 @@ export function RecipeForm({
       setInstructions((prev) =>
         prev.trim() ? `${prev.trim()}\n\n${text}` : text,
       );
+      // Auto-suggest ingredients/tags found in the freshly scanned text.
+      mergeDetected(await extractEntitiesFromText(text));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Text extraction failed.");
     } finally {
       setOcrBusyPath(null);
+    }
+  }
+
+  function onInstructionsSelect(e: React.SyntheticEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget;
+    setSelection(
+      cleanSelectedText(el.value.slice(el.selectionStart, el.selectionEnd)),
+    );
+  }
+
+  function addSelectedIngredient() {
+    const name = selection;
+    if (!name) return;
+    setIngredients((rows) =>
+      rows.some((r) => r.name.trim().toLowerCase() === name.toLowerCase())
+        ? rows
+        : [...rows, { name, quantity: "", unit: "" }],
+    );
+    setSelection("");
+  }
+
+  function addSelectedTag() {
+    const value = selection;
+    if (!value) return;
+    setTags((prev) =>
+      prev.some((t) => t.toLowerCase() === value.toLowerCase())
+        ? prev
+        : [...prev, value],
+    );
+    setSelection("");
+  }
+
+  // Scan whatever text is in the instructions field for known ingredients/tags.
+  async function detectEntities() {
+    const source = instructions.trim();
+    if (!source) {
+      setError("Add or extract some instructions text first.");
+      return;
+    }
+    setError(null);
+    setDetectBusy(true);
+    try {
+      const found = await extractEntitiesFromText(source);
+      mergeDetected(found);
+      if (found.ingredients.length === 0 && found.tags.length === 0) {
+        setError("No known ingredients or tags found in the text.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Detection failed.");
+    } finally {
+      setDetectBusy(false);
     }
   }
 
@@ -246,15 +335,58 @@ export function RecipeForm({
           id="instructions"
           value={instructions}
           onChange={(e) => setInstructions(e.target.value)}
+          onSelect={onInstructionsSelect}
           className="min-h-40"
           placeholder="Step-by-step instructions."
           required
         />
+        {selection ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            <span className="text-muted-foreground">Add</span>
+            <span className="max-w-[16rem] truncate font-medium">
+              “{selection}”
+            </span>
+            <span className="text-muted-foreground">as</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addSelectedIngredient}
+            >
+              <Plus className="h-4 w-4" /> Ingredient
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={addSelectedTag}
+            >
+              <Plus className="h-4 w-4" /> Tag
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Tip: highlight a word in the text to quickly add it as an ingredient
+            or tag.
+          </p>
+        )}
       </div>
 
       {/* Ingredients */}
       <div className="flex flex-col gap-2">
-        <Label>Ingredients</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label>Ingredients</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={detectEntities}
+            disabled={detectBusy}
+          >
+            <Sparkles className="h-4 w-4" />
+            {detectBusy ? "Detecting…" : "Detect from text"}
+          </Button>
+        </div>
         <div className="flex flex-col gap-2">
           {ingredients.map((row, i) => (
             <div key={i} className="flex gap-2">
