@@ -4,8 +4,8 @@ import { requireUser } from "@/lib/auth-guards";
 import { deleteRecipeImage, saveRecipeImage } from "@/lib/storage";
 
 /**
- * Upload a recipe image. Returns the public path to pass to
- * `createRecipe` / `updateRecipe` as `imagePath`.
+ * Upload a recipe image. Returns the public path to include in the
+ * `imagePaths` array passed to `createRecipe` / `updateRecipe`.
  *
  * Expects a `FormData` with an `image` File field.
  */

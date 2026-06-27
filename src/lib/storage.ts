@@ -22,6 +22,21 @@ function uploadDir(): string {
 }
 
 /**
+ * Resolve a public `/uploads/recipes/<file>` path to its absolute path on disk,
+ * or `null` if the path is malformed or escapes the uploads directory (guards
+ * against traversal like `/uploads/recipes/../../secret`). Returns a path
+ * regardless of whether the file exists.
+ */
+export function resolveStoredImagePath(
+  publicPath: string | null | undefined,
+): string | null {
+  if (!publicPath || !publicPath.startsWith(PUBLIC_PREFIX)) return null;
+  const filename = path.basename(publicPath);
+  if (filename !== publicPath.slice(PUBLIC_PREFIX.length)) return null;
+  return path.join(uploadDir(), filename);
+}
+
+/**
  * Validate and persist an uploaded image to local storage, returning the
  * public path (e.g. `/uploads/recipes/<uuid>.jpg`) to store on the recipe.
  */
@@ -51,15 +66,11 @@ export async function saveRecipeImage(file: File): Promise<string> {
 export async function deleteRecipeImage(
   publicPath: string | null | undefined,
 ): Promise<void> {
-  if (!publicPath || !publicPath.startsWith(PUBLIC_PREFIX)) return;
-
-  const filename = path.basename(publicPath);
-  // Reject anything that isn't a bare filename inside the uploads dir
-  // (guards against path traversal like `/uploads/recipes/../../secret`).
-  if (filename !== publicPath.slice(PUBLIC_PREFIX.length)) return;
+  const filePath = resolveStoredImagePath(publicPath);
+  if (!filePath) return;
 
   try {
-    await unlink(path.join(uploadDir(), filename));
+    await unlink(filePath);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }

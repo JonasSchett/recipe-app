@@ -87,11 +87,11 @@ model Recipe {
   title        String
   description  String?
   instructions String     @db.Text
-  imagePath    String?
   visibility   Visibility @default(PRIVATE)
   authorId     String
   author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
+  images      RecipeImage[]
   ingredients RecipeIngredient[]
   tags        RecipeTag[]
 
@@ -100,6 +100,19 @@ model Recipe {
 
   @@index([authorId])
   @@index([title])
+}
+
+// Ordered gallery of images for a recipe. The lowest `position` is the hero
+// image shown on cards and at the top of the recipe page.
+model RecipeImage {
+  id       String @id @default(cuid())
+  recipeId String
+  path     String
+  position Int
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
 }
 
 model Ingredient {

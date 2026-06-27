@@ -28,9 +28,12 @@ export async function createRecipe(input: RecipeInput) {
         title: data.title,
         description: data.description ?? null,
         instructions: data.instructions,
-        imagePath: data.imagePath ?? null,
         visibility: data.visibility,
         authorId: user.id,
+        // Array order defines display order; index 0 is the hero image.
+        images: {
+          create: data.imagePaths.map((path, position) => ({ path, position })),
+        },
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
         ingredients: { create: ingredients },
       },
@@ -49,7 +52,11 @@ export async function updateRecipe(id: string, input: RecipeInput) {
 
   const existing = await prisma.recipe.findUnique({
     where: { id },
-    select: { id: true, authorId: true, imagePath: true },
+    select: {
+      id: true,
+      authorId: true,
+      images: { select: { path: true } },
+    },
   });
   if (!existing) throw new Error("Recipe not found.");
   assertCanModifyRecipe(user, existing);
@@ -57,29 +64,34 @@ export async function updateRecipe(id: string, input: RecipeInput) {
   await prisma.$transaction(async (tx) => {
     const tagIds = await resolveTagIds(tx, data.tags);
     const ingredients = await resolveIngredients(tx, data.ingredients);
-    // Replace the join rows wholesale, then update the scalar fields.
+    // Replace the join rows (and image rows) wholesale, then update scalars.
     await tx.recipeTag.deleteMany({ where: { recipeId: id } });
     await tx.recipeIngredient.deleteMany({ where: { recipeId: id } });
+    await tx.recipeImage.deleteMany({ where: { recipeId: id } });
     await tx.recipe.update({
       where: { id },
       data: {
         title: data.title,
         description: data.description ?? null,
         instructions: data.instructions,
-        imagePath: data.imagePath ?? null,
         visibility: data.visibility,
+        images: {
+          create: data.imagePaths.map((path, position) => ({ path, position })),
+        },
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
         ingredients: { create: ingredients },
       },
     });
   });
 
-  // After the DB update succeeds, remove the previous image if it was replaced
-  // or cleared (file deletion can't participate in the transaction).
-  const newImagePath = data.imagePath ?? null;
-  if (existing.imagePath && existing.imagePath !== newImagePath) {
-    await deleteRecipeImage(existing.imagePath);
-  }
+  // After the DB update succeeds, remove files for images that are no longer
+  // referenced (file deletion can't participate in the transaction).
+  const keptPaths = new Set(data.imagePaths);
+  await Promise.all(
+    existing.images
+      .filter((img) => !keptPaths.has(img.path))
+      .map((img) => deleteRecipeImage(img.path)),
+  );
 
   revalidatePath("/");
   revalidatePath(`/recipes/${id}`);
@@ -91,13 +103,17 @@ export async function deleteRecipe(id: string) {
   const user = await requireUser();
   const existing = await prisma.recipe.findUnique({
     where: { id },
-    select: { id: true, authorId: true, imagePath: true },
+    select: {
+      id: true,
+      authorId: true,
+      images: { select: { path: true } },
+    },
   });
   if (!existing) throw new Error("Recipe not found.");
   assertCanModifyRecipe(user, existing);
 
   await prisma.recipe.delete({ where: { id } });
-  await deleteRecipeImage(existing.imagePath);
+  await Promise.all(existing.images.map((img) => deleteRecipeImage(img.path)));
   revalidatePath("/");
   return { id };
 }

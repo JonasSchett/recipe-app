@@ -18,20 +18,36 @@ export default async function RecipePage({
   if (!recipe) notFound();
 
   const canModify = isAdmin(user) || recipe.authorId === user.id;
+  const [heroImage, ...moreImages] = recipe.images;
 
   return (
     <article className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div className="aspect-video w-full overflow-hidden rounded-xl border bg-muted">
-        {recipe.imagePath ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={recipe.imagePath}
-            alt={recipe.title}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <ImageOff className="h-10 w-10" />
+      <div className="flex flex-col gap-2">
+        <div className="aspect-video w-full overflow-hidden rounded-xl border bg-muted">
+          {heroImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={heroImage.path}
+              alt={recipe.title}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <ImageOff className="h-10 w-10" />
+            </div>
+          )}
+        </div>
+        {moreImages.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {moreImages.map((image, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={image.id}
+                src={image.path}
+                alt={`${recipe.title} — image ${i + 2}`}
+                className="h-20 w-20 rounded-md border object-cover"
+              />
+            ))}
           </div>
         )}
       </div>

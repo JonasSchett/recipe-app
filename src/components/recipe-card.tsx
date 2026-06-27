@@ -20,6 +20,7 @@ export function RecipeCard({
 }) {
   const tags = recipe.tags.map((t) => t.tag);
   const vertical = orientation === "vertical";
+  const heroImage = recipe.images[0]?.path ?? null;
 
   return (
     <Link
@@ -35,10 +36,10 @@ export function RecipeCard({
           !vertical && "sm:aspect-square sm:w-40",
         )}
       >
-        {recipe.imagePath ? (
+        {heroImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- runtime-uploaded files in /public, not statically known
           <img
-            src={recipe.imagePath}
+            src={heroImage}
             alt={recipe.title}
             className="h-full w-full object-cover"
           />

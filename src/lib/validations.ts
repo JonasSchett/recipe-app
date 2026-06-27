@@ -18,8 +18,9 @@ export const recipeInputSchema = z.object({
   description: z.string().trim().max(2000).nullish(),
   instructions: z.string().trim().min(1, "Instructions are required").max(20000),
   visibility: visibilitySchema.default("PRIVATE"),
-  // The image is uploaded separately (Phase 4); actions take a resolved path.
-  imagePath: z.string().trim().max(500).nullish(),
+  // Images are uploaded separately (Phase 4); actions take resolved paths in
+  // display order — index 0 is the hero image.
+  imagePaths: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
   ingredients: z.array(ingredientInputSchema).max(100).default([]),
   tags: z.array(z.string().trim().min(1).max(50)).max(50).default([]),
 });

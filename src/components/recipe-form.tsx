@@ -2,15 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Plus, ScanText, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ImagePlus,
+  Plus,
+  ScanText,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { createRecipe, updateRecipe } from "@/lib/actions/recipes";
-import { uploadRecipeImage } from "@/lib/actions/images";
-import { extractTextFromImage } from "@/lib/actions/ocr";
+import { discardRecipeImage, uploadRecipeImage } from "@/lib/actions/images";
+import { extractTextFromRecipeImage } from "@/lib/actions/ocr";
 
 type IngredientRow = { name: string; quantity: string; unit: string };
 
@@ -19,7 +27,7 @@ export type RecipeFormInitial = {
   description: string;
   instructions: string;
   visibility: "PRIVATE" | "PUBLIC";
-  imagePath: string | null;
+  imagePaths: string[];
   ingredients: { name: string; quantity: number | null; unit: string | null }[];
   tags: string[];
 };
@@ -29,7 +37,7 @@ const EMPTY: RecipeFormInitial = {
   description: "",
   instructions: "",
   visibility: "PRIVATE",
-  imagePath: null,
+  imagePaths: [],
   ingredients: [],
   tags: [],
 };
@@ -58,43 +66,18 @@ export function RecipeForm({
   );
   const [tags, setTags] = useState<string[]>(initial.tags);
   const [tagDraft, setTagDraft] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(initial.imagePath);
-  const [removeImage, setRemoveImage] = useState(false);
+
+  // Ordered gallery of already-uploaded image paths; index 0 is the hero image.
+  const [images, setImages] = useState<string[]>(initial.imagePaths);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  // Paths present when the form loaded — these belong to the saved recipe, so we
+  // defer deleting their files to updateRecipe rather than discarding on remove.
+  const initialImagePaths = useRef(new Set(initial.imagePaths));
+  const [imageBusy, setImageBusy] = useState(false);
+  const [ocrBusyPath, setOcrBusyPath] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  // OCR: a separate file input so the scanned source (e.g. a photo of a cookbook
-  // page) is independent of the recipe's display image.
-  const ocrInputRef = useRef<HTMLInputElement>(null);
-  const [ocrBusy, setOcrBusy] = useState(false);
-
-  async function onPickOcrImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
-
-    setError(null);
-    setOcrBusy(true);
-    try {
-      const fd = new FormData();
-      fd.set("image", file);
-      const { text } = await extractTextFromImage(fd);
-      if (!text) {
-        setError("No text could be extracted from that image.");
-        return;
-      }
-      // Append to any existing instructions rather than overwriting them.
-      setInstructions((prev) =>
-        prev.trim() ? `${prev.trim()}\n\n${text}` : text,
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Text extraction failed.");
-    } finally {
-      setOcrBusy(false);
-    }
-  }
 
   function addIngredient() {
     setIngredients((rows) => [...rows, { name: "", quantity: "", unit: "" }]);
@@ -119,16 +102,65 @@ export function RecipeForm({
     setTags((t) => t.filter((x) => x !== tag));
   }
 
-  function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    setImageFile(file);
-    setRemoveImage(false);
-    setImagePreview(file ? URL.createObjectURL(file) : initial.imagePath);
+  async function onAddImages(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // allow re-selecting the same file later
+    if (files.length === 0) return;
+
+    setError(null);
+    setImageBusy(true);
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.set("image", file);
+        const { path } = await uploadRecipeImage(fd);
+        setImages((prev) => [...prev, path]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Image upload failed.");
+    } finally {
+      setImageBusy(false);
+    }
   }
-  function clearImage() {
-    setImageFile(null);
-    setImagePreview(null);
-    setRemoveImage(true);
+
+  function moveImage(index: number, direction: -1 | 1) {
+    setImages((prev) => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function removeImageAt(index: number) {
+    const path = images[index];
+    setImages((prev) => prev.filter((_, i) => i !== index));
+    // Files for newly-uploaded images can be cleaned up now; files belonging to
+    // the saved recipe are removed by updateRecipe once the user submits.
+    if (!initialImagePaths.current.has(path)) {
+      void discardRecipeImage(path).catch(() => {});
+    }
+  }
+
+  async function runOcr(path: string) {
+    setError(null);
+    setOcrBusyPath(path);
+    try {
+      const { text } = await extractTextFromRecipeImage(path);
+      if (!text) {
+        setError("No text could be extracted from that image.");
+        return;
+      }
+      // Append to any existing instructions rather than overwriting them.
+      setInstructions((prev) =>
+        prev.trim() ? `${prev.trim()}\n\n${text}` : text,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Text extraction failed.");
+    } finally {
+      setOcrBusyPath(null);
+    }
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -140,16 +172,6 @@ export function RecipeForm({
 
     setSubmitting(true);
     try {
-      // Resolve the image path: upload a new file, keep existing, or clear it.
-      let imagePath: string | null = initial.imagePath;
-      if (imageFile) {
-        const fd = new FormData();
-        fd.set("image", imageFile);
-        imagePath = (await uploadRecipeImage(fd)).path;
-      } else if (removeImage) {
-        imagePath = null;
-      }
-
       const parsedIngredients = ingredients
         .filter((row) => row.name.trim())
         .map((row) => {
@@ -171,7 +193,7 @@ export function RecipeForm({
         description: description.trim() || null,
         instructions: instructions.trim(),
         visibility: isPublic ? ("PUBLIC" as const) : ("PRIVATE" as const),
-        imagePath,
+        imagePaths: images,
         ingredients: parsedIngredients,
         tags,
       };
@@ -219,19 +241,7 @@ export function RecipeForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="instructions">Instructions</Label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => ocrInputRef.current?.click()}
-            disabled={ocrBusy}
-          >
-            <ScanText className="h-4 w-4" />
-            {ocrBusy ? "Extracting…" : "Extract text from image"}
-          </Button>
-        </div>
+        <Label htmlFor="instructions">Instructions</Label>
         <Textarea
           id="instructions"
           value={instructions}
@@ -240,17 +250,6 @@ export function RecipeForm({
           placeholder="Step-by-step instructions."
           required
         />
-        <input
-          ref={ocrInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          className="hidden"
-          onChange={onPickOcrImage}
-        />
-        <p className="text-xs text-muted-foreground">
-          Snap a photo or screenshot of a recipe to extract its text into this
-          field, then edit as needed.
-        </p>
       </div>
 
       {/* Ingredients */}
@@ -339,37 +338,98 @@ export function RecipeForm({
         )}
       </div>
 
-      {/* Image */}
+      {/* Images */}
       <div className="flex flex-col gap-2">
-        <Label htmlFor="image">Image</Label>
-        {imagePreview && (
-          <div className="relative w-fit">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imagePreview}
-              alt="Recipe preview"
-              className="h-40 w-40 rounded-md border object-cover"
-            />
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon"
-              className="absolute -right-2 -top-2 h-6 w-6"
-              onClick={clearImage}
-              aria-label="Remove image"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
+        <Label>Images</Label>
+        {images.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {images.map((path, i) => (
+              <li
+                key={path}
+                className="flex items-center gap-3 rounded-md border p-2"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- runtime-uploaded files */}
+                <img
+                  src={path}
+                  alt={`Recipe image ${i + 1}`}
+                  className="h-16 w-16 shrink-0 rounded object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  {i === 0 ? (
+                    <Badge variant="default">Hero image</Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      Image {i + 1}
+                    </span>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => moveImage(i, -1)}
+                    disabled={i === 0}
+                    aria-label={`Move image ${i + 1} up`}
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => moveImage(i, 1)}
+                    disabled={i === images.length - 1}
+                    aria-label={`Move image ${i + 1} down`}
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => runOcr(path)}
+                    disabled={ocrBusyPath !== null}
+                  >
+                    <ScanText className="h-4 w-4" />
+                    {ocrBusyPath === path ? "Extracting…" : "Extract text"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeImageAt(i)}
+                    aria-label={`Remove image ${i + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-        <Input
-          id="image"
+        <input
+          ref={imageInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
-          onChange={onPickImage}
+          multiple
+          className="hidden"
+          onChange={onAddImages}
         />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={imageBusy}
+        >
+          <ImagePlus className="h-4 w-4" />
+          {imageBusy ? "Uploading…" : "Add images"}
+        </Button>
         <p className="text-xs text-muted-foreground">
-          JPEG, PNG, WebP or GIF, up to 5 MB.
+          JPEG, PNG, WebP or GIF, up to 5 MB each. The first image is the hero
+          shown on cards — reorder with the arrows. Use “Extract text” to OCR a
+          photo of a recipe into the instructions above.
         </p>
       </div>
 
@@ -385,7 +445,7 @@ export function RecipeForm({
       </label>
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" disabled={submitting || imageBusy}>
           {submitting
             ? "Saving…"
             : mode === "edit"

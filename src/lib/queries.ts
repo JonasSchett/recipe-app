@@ -15,6 +15,7 @@ export function visibilityWhere(user: SessionUser): Prisma.RecipeWhereInput {
 /** Include shape returning a recipe with its author, ingredients, and tags. */
 const recipeDetailInclude = {
   author: { select: { id: true, name: true, email: true, image: true } },
+  images: { orderBy: { position: "asc" } },
   ingredients: { include: { ingredient: true } },
   tags: { include: { tag: true } },
 } satisfies Prisma.RecipeInclude;
