@@ -46,6 +46,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       # Optional: only these comma-separated emails may sign in (empty = anyone).
       AUTH_ALLOWED_EMAILS: ${AUTH_ALLOWED_EMAILS:-}
+      # Optional: these comma-separated emails are promoted to ADMIN on sign-in.
+      AUTH_ADMIN_EMAILS: ${AUTH_ADMIN_EMAILS:-}
     # Host 3100 -> container 3000 (3000 is taken by Immich). Point NPM at :3100.
     ports:
       - "3100:3000"

@@ -12,6 +12,8 @@ export type IngredientInput = z.infer<typeof ingredientInputSchema>;
 
 export const visibilitySchema = z.enum(["PRIVATE", "PUBLIC"]);
 
+export const roleSchema = z.enum(["ADMIN", "USER"]);
+
 /** Payload for creating or editing a recipe. */
 export const recipeInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),

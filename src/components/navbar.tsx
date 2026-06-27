@@ -7,17 +7,24 @@ import { buttonVariants } from "@/components/ui/button";
 import { signOutAction } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 
-type NavUser = { name?: string | null; email?: string | null } | null;
-
-const authedLinks = [
-  { href: "/recipes", label: "All Recipes" },
-  { href: "/recipes/new", label: "Create Recipe" },
-  { href: "/tags", label: "All Tags" },
-  { href: "/account", label: "Account" },
-];
+type NavUser = {
+  name?: string | null;
+  email?: string | null;
+  role?: "ADMIN" | "USER";
+} | null;
 
 export function Navbar({ user }: { user: NavUser }) {
   const [open, setOpen] = useState(false);
+
+  const authedLinks = [
+    { href: "/recipes", label: "All Recipes" },
+    { href: "/recipes/new", label: "Create Recipe" },
+    { href: "/tags", label: "All Tags" },
+    ...(user?.role === "ADMIN"
+      ? [{ href: "/admin/users", label: "Admin" }]
+      : []),
+    { href: "/account", label: "Account" },
+  ];
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">

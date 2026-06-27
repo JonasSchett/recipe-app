@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -10,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getCurrentUser } from "@/lib/auth-guards";
 import { signOutAction } from "@/lib/actions/auth";
+import { cn } from "@/lib/utils";
 
 export default async function AccountPage() {
   const user = await getCurrentUser();
@@ -30,6 +32,14 @@ export default async function AccountPage() {
               {user.role}
             </Badge>
           </div>
+          {user.role === "ADMIN" && (
+            <Link
+              href="/admin/users"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Manage users
+            </Link>
+          )}
           <form action={signOutAction}>
             <Button variant="outline" type="submit">
               Sign out

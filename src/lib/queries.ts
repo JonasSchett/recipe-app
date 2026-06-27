@@ -1,6 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, requireUser, type SessionUser } from "@/lib/auth-guards";
+import {
+  getCurrentUser,
+  requireAdmin,
+  requireUser,
+  type SessionUser,
+} from "@/lib/auth-guards";
 import { recipeFilterSchema, type RecipeFilter } from "@/lib/validations";
 
 /**
@@ -128,6 +133,23 @@ export async function getAllTags() {
     recipeCount: tag._count.recipes,
     hearted: heartedIds.has(tag.id),
   }));
+}
+
+/** All users with their role and recipe count, for the admin console. */
+export async function getAllUsers() {
+  await requireAdmin();
+  return prisma.user.findMany({
+    orderBy: [{ role: "asc" }, { email: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      role: true,
+      createdAt: true,
+      _count: { select: { recipes: true } },
+    },
+  });
 }
 
 /** All ingredients with recipe counts (alphabetical). */
