@@ -33,7 +33,9 @@ RUN npm ci --omit=dev
 # ---- Runner -----------------------------------------------------------------
 FROM node:20-alpine AS runner
 # su-exec lets the root entrypoint drop privileges after fixing volume perms.
-RUN apk add --no-cache openssl su-exec
+# tesseract-ocr + the English language data power local recipe-image OCR
+# (src/lib/actions/ocr.ts) — no network or API key needed at runtime.
+RUN apk add --no-cache openssl su-exec tesseract-ocr tesseract-ocr-data-eng
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

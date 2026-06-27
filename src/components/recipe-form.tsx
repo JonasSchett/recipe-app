@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Plus, ScanText, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { createRecipe, updateRecipe } from "@/lib/actions/recipes";
 import { uploadRecipeImage } from "@/lib/actions/images";
+import { extractTextFromImage } from "@/lib/actions/ocr";
 
 type IngredientRow = { name: string; quantity: string; unit: string };
 
@@ -63,6 +64,37 @@ export function RecipeForm({
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // OCR: a separate file input so the scanned source (e.g. a photo of a cookbook
+  // page) is independent of the recipe's display image.
+  const ocrInputRef = useRef<HTMLInputElement>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+
+  async function onPickOcrImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+
+    setError(null);
+    setOcrBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("image", file);
+      const { text } = await extractTextFromImage(fd);
+      if (!text) {
+        setError("No text could be extracted from that image.");
+        return;
+      }
+      // Append to any existing instructions rather than overwriting them.
+      setInstructions((prev) =>
+        prev.trim() ? `${prev.trim()}\n\n${text}` : text,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Text extraction failed.");
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   function addIngredient() {
     setIngredients((rows) => [...rows, { name: "", quantity: "", unit: "" }]);
@@ -187,7 +219,19 @@ export function RecipeForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="instructions">Instructions</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="instructions">Instructions</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => ocrInputRef.current?.click()}
+            disabled={ocrBusy}
+          >
+            <ScanText className="h-4 w-4" />
+            {ocrBusy ? "Extracting…" : "Extract text from image"}
+          </Button>
+        </div>
         <Textarea
           id="instructions"
           value={instructions}
@@ -196,6 +240,17 @@ export function RecipeForm({
           placeholder="Step-by-step instructions."
           required
         />
+        <input
+          ref={ocrInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={onPickOcrImage}
+        />
+        <p className="text-xs text-muted-foreground">
+          Snap a photo or screenshot of a recipe to extract its text into this
+          field, then edit as needed.
+        </p>
       </div>
 
       {/* Ingredients */}
