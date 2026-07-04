@@ -140,6 +140,42 @@ export async function getHeartedTagSections(take = 12) {
   );
 }
 
+/**
+ * For the Favourite Tags page: each tag the current user has hearted, with a
+ * representative image — the first visible recipe carrying that tag that has
+ * an image (`null` if none do).
+ */
+export async function getHeartedTagCards() {
+  const user = await requireUser();
+  const hearted = await prisma.userHeartedTag.findMany({
+    where: { userId: user.id },
+    include: { tag: true },
+    orderBy: { tag: { name: "asc" } },
+  });
+
+  return Promise.all(
+    hearted.map(async ({ tag }) => {
+      const recipe = await prisma.recipe.findFirst({
+        where: {
+          AND: [
+            visibilityWhere(user),
+            { tags: { some: { tagId: tag.id } } },
+            { images: { some: {} } },
+          ],
+        },
+        select: {
+          images: {
+            orderBy: { position: "asc" },
+            take: 1,
+            select: { path: true },
+          },
+        },
+      });
+      return { tag, imagePath: recipe?.images[0]?.path ?? null };
+    }),
+  );
+}
+
 /** All tags with recipe counts; flags which ones the current user has hearted. */
 export async function getAllTags() {
   const user = await getCurrentUser();

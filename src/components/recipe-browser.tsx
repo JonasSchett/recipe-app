@@ -43,6 +43,9 @@ export async function RecipeBrowser({
   return (
     <div className="flex flex-col gap-4">
       <RecipeFilters
+        // Remount when the term changes via the URL (e.g. navbar search) so the
+        // input's local draft state picks up the new value.
+        key={search}
         allTags={allTags.map((t) => ({ id: t.id, name: t.name }))}
         allIngredients={allIngredients.map((i) => ({ id: i.id, name: i.name }))}
         selectedTagIds={tagIds}
