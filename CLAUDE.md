@@ -79,6 +79,10 @@ generated migration under `prisma/migrations/`.
   (`src/lib/actions/images.ts`) wraps it; the form uploads first, then passes the
   returned path to `createRecipe`/`updateRecipe` as `imagePath`. Update/delete
   clean up the previous file. Allowed: jpeg/png/webp/gif, max 5 MB.
+- The production server only serves `public/` files that existed when it
+  started, so images uploaded at runtime would 404 (dev serves `public/` from
+  disk per-request, masking this). `src/app/uploads/recipes/[filename]/route.ts`
+  serves them from disk as a fallback — don't delete it.
 - `.env` is git-ignored; `.env.example` is the source of truth for required vars
   (`DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_CLIENT_ID/SECRET`).
 
