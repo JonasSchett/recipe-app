@@ -59,11 +59,9 @@ export default async function Home({
               {recipes.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No recipes yet.</p>
               ) : (
-                <div className="flex gap-4 overflow-x-auto pb-2">
+                <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))]">
                   {recipes.map((recipe) => (
-                    <div key={recipe.id} className="w-72 shrink-0">
-                      <RecipeCard recipe={recipe} orientation="vertical" />
-                    </div>
+                    <RecipeCard key={recipe.id} recipe={recipe} />
                   ))}
                 </div>
               )}

@@ -62,7 +62,7 @@ export async function RecipeBrowser({
           <p className="text-sm text-muted-foreground">
             {total} recipe{total === 1 ? "" : "s"}
           </p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))]">
             {items.map((recipe) => (
               <RecipeCard key={recipe.id} recipe={recipe} />
             ))}

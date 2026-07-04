@@ -66,7 +66,7 @@ export function Navbar({ user }: { user: NavUser }) {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <ChefHat className="h-5 w-5" />
           <span>Recipe App</span>

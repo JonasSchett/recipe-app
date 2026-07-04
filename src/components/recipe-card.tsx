@@ -2,49 +2,31 @@ import Link from "next/link";
 import { ImageOff, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { RecipeDetail } from "@/lib/queries";
-import { cn } from "@/lib/utils";
 
 /**
- * Global recipe card: image on the left (top on small screens), bold title,
- * short description, and pill badges for tags.
- *
- * `orientation="vertical"` forces an image-on-top layout — used in the
- * dashboard's horizontally-scrolling hearted-tag rows.
+ * Global recipe card: square image on the left, bold title, short description,
+ * and pill badges for tags. Designed to sit in an auto-fill grid column
+ * (min ~18rem) and stretch with it, staying roughly 16:9–2:1 overall.
  */
-export function RecipeCard({
-  recipe,
-  orientation = "responsive",
-}: {
-  recipe: RecipeDetail;
-  orientation?: "responsive" | "vertical";
-}) {
+export function RecipeCard({ recipe }: { recipe: RecipeDetail }) {
   const tags = recipe.tags.map((t) => ({
     id: t.tag.id,
     label: t.displayName ?? t.tag.name,
   }));
-  const vertical = orientation === "vertical";
   const heroImage = recipe.images[0]?.path ?? null;
 
   return (
     <Link
       href={`/recipes/${recipe.id}`}
-      className={cn(
-        "group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-colors hover:bg-accent/40",
-        !vertical && "sm:flex-row",
-      )}
+      className="group flex overflow-hidden rounded-xl border bg-card shadow-sm transition-colors hover:bg-accent/40"
     >
-      <div
-        className={cn(
-          "relative aspect-video w-full shrink-0 bg-muted",
-          !vertical && "sm:aspect-square sm:w-40",
-        )}
-      >
+      <div className="relative aspect-square w-32 shrink-0 self-stretch bg-muted sm:w-36">
         {heroImage ? (
           // eslint-disable-next-line @next/next/no-img-element -- runtime-uploaded files in /public, not statically known
           <img
             src={heroImage}
             alt={recipe.title}
-            className="h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
