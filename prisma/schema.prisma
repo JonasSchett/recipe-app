@@ -86,7 +86,7 @@ model Recipe {
   id           String     @id @default(cuid())
   title        String
   description  String?
-  instructions String     @db.Text
+  instructions String?    @db.Text
   visibility   Visibility @default(PRIVATE)
   authorId     String
   author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)

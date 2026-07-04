@@ -257,7 +257,6 @@ export function RecipeForm({
     setError(null);
 
     if (!title.trim()) return setError("Title is required.");
-    if (!instructions.trim()) return setError("Instructions are required.");
 
     setSubmitting(true);
     try {
@@ -280,7 +279,7 @@ export function RecipeForm({
       const input = {
         title: title.trim(),
         description: description.trim() || null,
-        instructions: instructions.trim(),
+        instructions: instructions.trim() || null,
         visibility: isPublic ? ("PUBLIC" as const) : ("PRIVATE" as const),
         imagePaths: images,
         ingredients: parsedIngredients,
@@ -337,8 +336,7 @@ export function RecipeForm({
           onChange={(e) => setInstructions(e.target.value)}
           onSelect={onInstructionsSelect}
           className="min-h-40"
-          placeholder="Step-by-step instructions."
-          required
+          placeholder="Step-by-step instructions (optional — the photos may say it all)."
         />
         {selection ? (
           <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">

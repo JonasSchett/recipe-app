@@ -27,7 +27,7 @@ export async function createRecipe(input: RecipeInput) {
       data: {
         title: data.title,
         description: data.description ?? null,
-        instructions: data.instructions,
+        instructions: data.instructions ?? null,
         visibility: data.visibility,
         authorId: user.id,
         // Array order defines display order; index 0 is the hero image.
@@ -75,7 +75,7 @@ export async function updateRecipe(id: string, input: RecipeInput) {
       data: {
         title: data.title,
         description: data.description ?? null,
-        instructions: data.instructions,
+        instructions: data.instructions ?? null,
         visibility: data.visibility,
         images: {
           create: data.imagePaths.map((path, position) => ({ path, position })),

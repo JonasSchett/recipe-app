@@ -18,7 +18,8 @@ export const roleSchema = z.enum(["ADMIN", "USER"]);
 export const recipeInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
   description: z.string().trim().max(2000).nullish(),
-  instructions: z.string().trim().min(1, "Instructions are required").max(20000),
+  // Optional: some recipes are just photos of a cookbook page plus tags.
+  instructions: z.string().trim().max(20000).nullish(),
   visibility: visibilitySchema.default("PRIVATE"),
   // Images are uploaded separately (Phase 4); actions take resolved paths in
   // display order — index 0 is the hero image.

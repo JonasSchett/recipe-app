@@ -27,7 +27,7 @@ export default async function EditRecipePage({
         initial={{
           title: recipe.title,
           description: recipe.description ?? "",
-          instructions: recipe.instructions,
+          instructions: recipe.instructions ?? "",
           visibility: recipe.visibility,
           imagePaths: recipe.images.map((img) => img.path),
           ingredients: recipe.ingredients.map(

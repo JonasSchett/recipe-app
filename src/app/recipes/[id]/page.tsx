@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { KeepScreenAwake } from "@/components/keep-screen-awake";
 import { RecipeActions } from "@/components/recipe-actions";
 import { RecipeGallery } from "@/components/recipe-gallery";
 import { getCurrentUser, isAdmin } from "@/lib/auth-guards";
@@ -21,6 +22,8 @@ export default async function RecipePage({
 
   return (
     <article className="mx-auto flex max-w-2xl flex-col gap-6">
+      {/* Cooking mode: don't let the phone screen sleep mid-recipe. */}
+      <KeepScreenAwake />
       <RecipeGallery images={recipe.images} title={recipe.title} />
 
       <header className="flex flex-col gap-2">
@@ -67,12 +70,14 @@ export default async function RecipePage({
         </section>
       )}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold">Instructions</h2>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {recipe.instructions}
-        </p>
-      </section>
+      {recipe.instructions && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xl font-semibold">Instructions</h2>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {recipe.instructions}
+          </p>
+        </section>
+      )}
     </article>
   );
 }
