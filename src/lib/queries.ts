@@ -7,6 +7,11 @@ import {
   type SessionUser,
 } from "@/lib/auth-guards";
 import { recipeFilterSchema, type RecipeFilter } from "@/lib/validations";
+import {
+  INGREDIENT_TRANSLATIONS,
+  TAG_TRANSLATIONS,
+} from "@/lib/i18n/dictionary";
+import { withDictionary, type EntitySuggestion } from "@/lib/suggest";
 
 /**
  * Prisma `where` fragment restricting recipes to those a user may view:
@@ -215,6 +220,63 @@ export async function getAllUsers() {
       _count: { select: { recipes: true } },
     },
   });
+}
+
+/**
+ * Every ingredient and tag with **all** of its surface forms, for the
+ * autocomplete. Loaded once per form/page render and filtered client-side —
+ * the vocabulary is small (hundreds of rows) and this keeps typing latency at
+ * zero. If it ever grows past a few thousand entities, swap the callers for a
+ * debounced server-side search on `normalized` instead.
+ *
+ * Curated dictionary terms with no stored entity are appended (`id: null`) so
+ * suggestions are useful on a fresh database too; they always rank last.
+ * Tags and ingredients are global — no visibility filtering applies.
+ */
+export async function getEntityVocabulary(): Promise<{
+  ingredients: EntitySuggestion[];
+  tags: EntitySuggestion[];
+}> {
+  await requireUser();
+
+  const include = {
+    names: { select: { name: true } },
+    _count: { select: { recipes: true } },
+  } as const;
+
+  const [ingredients, tags] = await Promise.all([
+    prisma.ingredient.findMany({ include }),
+    prisma.tag.findMany({ include }),
+  ]);
+
+  const toSuggestion = (
+    entity: {
+      id: string;
+      name: string;
+      names: { name: string }[];
+      _count: { recipes: number };
+    },
+    kind: "tag" | "ingredient",
+  ): EntitySuggestion => ({
+    id: entity.id,
+    canonical: entity.name,
+    names: entity.names.map((n) => n.name),
+    recipeCount: entity._count.recipes,
+    kind,
+  });
+
+  return {
+    ingredients: withDictionary(
+      ingredients.map((i) => toSuggestion(i, "ingredient")),
+      INGREDIENT_TRANSLATIONS,
+      "ingredient",
+    ),
+    tags: withDictionary(
+      tags.map((t) => toSuggestion(t, "tag")),
+      TAG_TRANSLATIONS,
+      "tag",
+    ),
+  };
 }
 
 /** All ingredients with recipe counts (alphabetical). */

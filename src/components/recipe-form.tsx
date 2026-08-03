@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { EntityAutocomplete } from "@/components/entity-autocomplete";
+import type { EntitySuggestion } from "@/lib/suggest";
 import { createRecipe, updateRecipe } from "@/lib/actions/recipes";
 import { discardRecipeImage, uploadRecipeImage } from "@/lib/actions/images";
 import { extractTextFromRecipeImage } from "@/lib/actions/ocr";
@@ -52,14 +54,24 @@ function cleanSelectedText(raw: string): string {
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 }
 
+/** Autocomplete vocabulary, preloaded by the page (see `getEntityVocabulary`). */
+export type RecipeFormVocabulary = {
+  ingredients: EntitySuggestion[];
+  tags: EntitySuggestion[];
+};
+
+const NO_VOCABULARY: RecipeFormVocabulary = { ingredients: [], tags: [] };
+
 export function RecipeForm({
   mode,
   recipeId,
   initial = EMPTY,
+  vocabulary = NO_VOCABULARY,
 }: {
   mode: "create" | "edit";
   recipeId?: string;
   initial?: RecipeFormInitial;
+  vocabulary?: RecipeFormVocabulary;
 }) {
   const router = useRouter();
 
@@ -104,8 +116,8 @@ export function RecipeForm({
     setIngredients((rows) => rows.filter((_, i) => i !== index));
   }
 
-  function addTag() {
-    const value = tagDraft.trim();
+  function addTag(name = tagDraft) {
+    const value = name.trim();
     if (value && !tags.some((t) => t.toLowerCase() === value.toLowerCase())) {
       setTags((t) => [...t, value]);
     }
@@ -405,10 +417,17 @@ export function RecipeForm({
                 placeholder="Unit"
                 aria-label={`Ingredient ${i + 1} unit`}
               />
-              <Input
+              <EntityAutocomplete
                 className="flex-1"
                 value={row.name}
-                onChange={(e) => updateIngredient(i, { name: e.target.value })}
+                onValueChange={(name) => updateIngredient(i, { name })}
+                onPick={(match) => updateIngredient(i, { name: match.label })}
+                vocabulary={vocabulary.ingredients}
+                // Don't re-offer an ingredient another row already uses — the
+                // composite PK forbids the same ingredient twice on a recipe.
+                exclude={ingredients
+                  .filter((_, other) => other !== i)
+                  .map((r) => r.name)}
                 placeholder="Ingredient name"
                 aria-label={`Ingredient ${i + 1} name`}
               />
@@ -433,19 +452,19 @@ export function RecipeForm({
       <div className="flex flex-col gap-2">
         <Label htmlFor="tag">Tags</Label>
         <div className="flex gap-2">
-          <Input
+          <EntityAutocomplete
+            className="flex-1"
             id="tag"
             value={tagDraft}
-            onChange={(e) => setTagDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
+            onValueChange={setTagDraft}
+            // Picking a suggestion adds it straight away, like pressing Enter.
+            onPick={(match) => addTag(match.label)}
+            onEnter={() => addTag()}
+            vocabulary={vocabulary.tags}
+            exclude={tags}
             placeholder="Add a tag and press Enter"
           />
-          <Button type="button" variant="outline" onClick={addTag}>
+          <Button type="button" variant="outline" onClick={() => addTag()}>
             Add
           </Button>
         </div>

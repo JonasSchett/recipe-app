@@ -109,6 +109,18 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
 - Recipe images render with plain `<img>` (not `next/image`) since uploads are
   runtime files, not statically known at build.
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
+- **Autocomplete** for ingredient/tag entry: `src/lib/suggest.ts` is the pure
+  matcher (fold = lowercase + `ß`→`ss` + diacritics dropped, plus an `ue`-style
+  expanded key, so "Kart"/"suss"/"suess" all hit). `getEntityVocabulary()` in
+  `queries.ts` preloads every entity with **all** its surface forms and merges
+  the curated dictionary — enriching stored entities with translations they lack
+  (legacy rows often have only their English alias) and appending unseen terms as
+  `id: null`. Pages pass it down; `EntityAutocomplete` filters client-side, so
+  there is no per-keystroke roundtrip. Used by the recipe form (ingredient rows +
+  tag input), the `RecipeFilters` search box (picking applies a filter, so
+  dictionary-only entries are excluded there), and `AddTagForm` on `/tags`.
+  If the vocabulary ever exceeds a few thousand entities, switch the callers to a
+  debounced server search on `normalized` instead.
 - The filterable list lives in `RecipeBrowser` (server) + `RecipeFilters`
   (client, URL-driven: `?q=&tags=a,b&ingredients=c`), shared by `/` and
   `/recipes`. The dashboard `/` adds hearted-tag sections above it; those rows

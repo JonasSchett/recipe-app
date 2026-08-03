@@ -2,7 +2,12 @@ import Link from "next/link";
 import { RecipeFilters } from "@/components/recipe-filters";
 import { RecipeCard } from "@/components/recipe-card";
 import { buttonVariants } from "@/components/ui/button";
-import { getAllIngredients, getAllTags, getRecipes } from "@/lib/queries";
+import {
+  getAllIngredients,
+  getAllTags,
+  getEntityVocabulary,
+  getRecipes,
+} from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,10 +28,11 @@ export async function RecipeBrowser({
   ingredientIds?: string[];
   page?: number;
 }) {
-  const [result, allTags, allIngredients] = await Promise.all([
+  const [result, allTags, allIngredients, vocabulary] = await Promise.all([
     getRecipes({ search, tagIds, ingredientIds, page }),
     getAllTags(),
     getAllIngredients(),
+    getEntityVocabulary(),
   ]);
   const { items, total, page: current, pageCount } = result;
 
@@ -48,6 +54,11 @@ export async function RecipeBrowser({
         key={search}
         allTags={allTags.map((t) => ({ id: t.id, name: t.name }))}
         allIngredients={allIngredients.map((i) => ({ id: i.id, name: i.name }))}
+        // Only stored entities can be filtered on, so drop the curated
+        // dictionary terms that have no row (and therefore no id) yet.
+        suggestions={[...vocabulary.tags, ...vocabulary.ingredients].filter(
+          (entity) => entity.id !== null,
+        )}
         selectedTagIds={tagIds}
         selectedIngredientIds={ingredientIds}
         search={search}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireUser } from "@/lib/auth-guards";
 import { tagNameSchema } from "@/lib/validations";
+import { resolveTags } from "@/lib/actions/_shared";
 
 /** Mark a tag as "hearted" for the current user (for dashboard sections). */
 export async function heartTag(tagId: string) {
@@ -25,14 +26,17 @@ export async function unheartTag(tagId: string) {
   return { tagId, hearted: false };
 }
 
-/** Create a tag by name, reusing an existing one (case-insensitive). */
+/**
+ * Create a tag by name in any language, reusing the existing entity when the
+ * name (or its translation) is already known. Goes through `resolveTags` so the
+ * localized alias rows get written too — otherwise the tag would be invisible
+ * to cross-lingual search and to the autocomplete.
+ */
 export async function createTag(name: string) {
   await requireUser();
   const parsed = tagNameSchema.parse(name);
-  const existing = await prisma.tag.findFirst({
-    where: { name: { equals: parsed, mode: "insensitive" } },
-  });
-  const tag = existing ?? (await prisma.tag.create({ data: { name: parsed } }));
+  const [resolved] = await prisma.$transaction((tx) => resolveTags(tx, [parsed]));
+  const tag = await prisma.tag.findUniqueOrThrow({ where: { id: resolved.tagId } });
   revalidatePath("/tags");
   return tag;
 }

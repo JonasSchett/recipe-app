@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { EntityAutocomplete } from "@/components/entity-autocomplete";
+import type { EntitySuggestion } from "@/lib/suggest";
 import { cn } from "@/lib/utils";
 
 type Option = { id: string; name: string };
@@ -14,6 +15,10 @@ type Option = { id: string; name: string };
  * any number of tags and ingredients. Selections are pushed to the query string
  * (`?q=&tags=a,b&ingredients=c`) so the server re-renders filtered, paginated
  * results. Multiple selections narrow with AND (a recipe must match them all).
+ *
+ * The search box autocompletes over tag/ingredient names in either language:
+ * picking a suggestion applies it as a filter, while pressing Enter without one
+ * highlighted runs the free-text search as before.
  */
 export function RecipeFilters({
   allTags,
@@ -21,12 +26,14 @@ export function RecipeFilters({
   selectedTagIds,
   selectedIngredientIds,
   search,
+  suggestions = [],
 }: {
   allTags: Option[];
   allIngredients: Option[];
   selectedTagIds: string[];
   selectedIngredientIds: string[];
   search: string;
+  suggestions?: EntitySuggestion[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -58,6 +65,17 @@ export function RecipeFilters({
 
   const activeCount = selectedTagIds.length + selectedIngredientIds.length;
 
+  // Don't suggest what's already applied as a filter.
+  const available = useMemo(
+    () =>
+      suggestions.filter((entity) =>
+        entity.kind === "tag"
+          ? !selectedTagIds.includes(entity.id!)
+          : !selectedIngredientIds.includes(entity.id!),
+      ),
+    [suggestions, selectedTagIds, selectedIngredientIds],
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-2">
@@ -68,12 +86,25 @@ export function RecipeFilters({
             push({ q: draft });
           }}
         >
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 z-10 h-4 w-4 text-muted-foreground" />
+          <EntityAutocomplete
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onValueChange={setDraft}
+            onPick={({ entity }) => {
+              setDraft("");
+              if (entity.kind === "tag") {
+                push({ tags: toggle(selectedTagIds, entity.id!) });
+              } else {
+                push({ ingredients: toggle(selectedIngredientIds, entity.id!) });
+              }
+            }}
+            onEnter={() => push({ q: draft })}
+            vocabulary={available}
             placeholder="Search recipes…"
-            className="pl-8"
+            // Distinct from the navbar's "Search recipes" box, which is a
+            // plain free-text search with no suggestions.
+            aria-label="Search recipes, tags and ingredients"
+            inputClassName="pl-8"
           />
         </form>
         <Button

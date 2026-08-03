@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { RecipeForm } from "@/components/recipe-form";
 import { getCurrentUser, isAdmin } from "@/lib/auth-guards";
-import { getRecipeById } from "@/lib/queries";
+import { getEntityVocabulary, getRecipeById } from "@/lib/queries";
 
 export default async function EditRecipePage({
   params,
@@ -18,12 +18,15 @@ export default async function EditRecipePage({
   // Only the author or an admin may edit.
   if (!isAdmin(user) && recipe.authorId !== user.id) redirect(`/recipes/${id}`);
 
+  const vocabulary = await getEntityVocabulary();
+
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">Edit Recipe</h1>
       <RecipeForm
         mode="edit"
         recipeId={recipe.id}
+        vocabulary={vocabulary}
         initial={{
           title: recipe.title,
           description: recipe.description ?? "",

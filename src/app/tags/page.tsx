@@ -2,18 +2,24 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { TagHeartButton } from "@/components/tag-heart-button";
+import { AddTagForm } from "@/components/add-tag-form";
 import { getCurrentUser } from "@/lib/auth-guards";
-import { getAllTags } from "@/lib/queries";
+import { getAllTags, getEntityVocabulary } from "@/lib/queries";
 
 export default async function TagsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const tags = await getAllTags();
+  const [tags, vocabulary] = await Promise.all([
+    getAllTags(),
+    getEntityVocabulary(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold tracking-tight">All Tags</h1>
+
+      <AddTagForm vocabulary={vocabulary.tags} />
 
       {tags.length === 0 ? (
         <p className="py-12 text-center text-muted-foreground">
