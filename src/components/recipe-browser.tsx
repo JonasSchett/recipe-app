@@ -129,7 +129,10 @@ export async function RecipeBrowser({
           </>
         )}
 
-        <BatchActionBar pageRecipeIds={items.map((recipe) => recipe.id)} />
+        <BatchActionBar
+          pageRecipeIds={items.map((recipe) => recipe.id)}
+          tagVocabulary={vocabulary.tags}
+        />
       </div>
     </RecipeSelectionProvider>
   );

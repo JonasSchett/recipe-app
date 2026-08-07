@@ -61,3 +61,33 @@ export const ingredientNameSchema = z
   .trim()
   .min(1, "Ingredient name is required")
   .max(100);
+
+// --- Batch operations (declared last: they build on the schemas above) -------
+
+/**
+ * Recipes targeted by a batch operation. Capped well below what the UI can
+ * select so a hand-made payload can't ask for unbounded work.
+ */
+export const batchRecipeIdsSchema = z
+  .array(z.string().min(1))
+  .min(1, "Select at least one recipe")
+  .max(200);
+
+/** Payload for adding tags to many recipes at once. */
+export const batchTagsSchema = z.object({
+  recipeIds: batchRecipeIdsSchema,
+  tags: z.array(tagNameSchema).min(1, "Add at least one tag").max(50),
+});
+
+export type BatchTagsInput = z.infer<typeof batchTagsSchema>;
+
+/** Payload for adding ingredients to many recipes at once. */
+export const batchIngredientsSchema = z.object({
+  recipeIds: batchRecipeIdsSchema,
+  ingredients: z
+    .array(ingredientInputSchema)
+    .min(1, "Add at least one ingredient")
+    .max(50),
+});
+
+export type BatchIngredientsInput = z.infer<typeof batchIngredientsSchema>;
