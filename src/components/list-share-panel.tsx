@@ -1,0 +1,228 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Copy, Link2, RefreshCw, Share2, UserMinus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  removeListMember,
+  setListMemberRole,
+  setListShareLink,
+} from "@/lib/actions/lists";
+
+type Member = {
+  userId: string;
+  role: "VIEWER" | "EDITOR";
+  user: { id: string; name: string | null; email: string | null };
+};
+
+/**
+ * Owner-only sharing controls: the secret link, and who currently has access.
+ */
+export function ListSharePanel({
+  listId,
+  shareToken,
+  shareRole,
+  members,
+  privateRecipeCount,
+}: {
+  listId: string;
+  shareToken: string | null;
+  shareRole: "VIEWER" | "EDITOR";
+  members: Member[];
+  privateRecipeCount: number;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = shareToken
+    ? `${typeof window === "undefined" ? "" : window.location.origin}/lists/join/${shareToken}`
+    : null;
+
+  function run(action: () => Promise<unknown>, failure: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await action();
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : failure);
+      }
+    });
+  }
+
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border p-4">
+      <div className="flex items-center gap-2">
+        <Share2 className="h-4 w-4" />
+        <h2 className="text-lg font-semibold">Sharing</h2>
+      </div>
+
+      {privateRecipeCount > 0 && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+          {privateRecipeCount} private recipe
+          {privateRecipeCount === 1 ? " is" : "s are"} pinned here. Anyone you
+          share this list with can view {privateRecipeCount === 1 ? "it" : "them"}
+          {" "}— they still can&apos;t edit or delete anything.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Share link</span>
+        </div>
+
+        {shareUrl ? (
+          <>
+            <div className="flex gap-2">
+              <Input readOnly value={shareUrl} aria-label="Share link" />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(shareUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Anyone signed in who opens this link joins as{" "}
+              {shareRole === "EDITOR" ? "an editor" : "a viewer"}.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() =>
+                  run(
+                    () => setListShareLink(listId, true, shareRole),
+                    "Could not rotate the link.",
+                  )
+                }
+              >
+                <RefreshCw className="h-4 w-4" /> New link
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() =>
+                  run(
+                    () => setListShareLink(listId, false),
+                    "Could not turn sharing off.",
+                  )
+                }
+              >
+                Turn off
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              “New link” revokes the old one. People who already joined keep
+              their access.
+            </p>
+          </>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                run(
+                  () => setListShareLink(listId, true, "EDITOR"),
+                  "Could not create a link.",
+                )
+              }
+            >
+              Create link (can edit)
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                run(
+                  () => setListShareLink(listId, true, "VIEWER"),
+                  "Could not create a link.",
+                )
+              }
+            >
+              Create link (view only)
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {members.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">People with access</span>
+          <ul className="flex flex-col gap-2">
+            {members.map((member) => (
+              <li
+                key={member.userId}
+                className="flex flex-wrap items-center gap-2 rounded-md border p-2"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {member.user.name ?? member.user.email}
+                </span>
+                <Badge variant="secondary">
+                  {member.role === "EDITOR" ? "Can edit" : "View only"}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() =>
+                    run(
+                      () =>
+                        setListMemberRole(
+                          listId,
+                          member.userId,
+                          member.role === "EDITOR" ? "VIEWER" : "EDITOR",
+                        ),
+                      "Could not change their role.",
+                    )
+                  }
+                >
+                  Make {member.role === "EDITOR" ? "view only" : "editor"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={pending}
+                  aria-label={`Remove ${member.user.name ?? member.user.email}`}
+                  onClick={() =>
+                    run(
+                      () => removeListMember(listId, member.userId),
+                      "Could not remove them.",
+                    )
+                  }
+                >
+                  <UserMinus className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </section>
+  );
+}

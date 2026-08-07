@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipe-card";
 import { ListHeaderActions } from "@/components/list-header-actions";
 import { ListItemActions } from "@/components/list-item-actions";
+import { ListSharePanel } from "@/components/list-share-panel";
 import { getCurrentUser } from "@/lib/auth-guards";
 import { getListById } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -83,20 +84,33 @@ export default async function ListPage({
         </ol>
       )}
 
-      {list.members.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">Shared with</h2>
-          <ul className="flex flex-wrap gap-2">
-            {list.members.map((member) => (
-              <li key={member.userId}>
-                <Badge variant="secondary">
-                  {member.user.name ?? member.user.email}
-                  {member.role === "VIEWER" && " · view only"}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {permission === "OWNER" ? (
+        <ListSharePanel
+          listId={list.id}
+          shareToken={list.shareToken}
+          shareRole={list.shareRole}
+          members={list.members}
+          privateRecipeCount={
+            list.items.filter((item) => item.recipe.visibility === "PRIVATE")
+              .length
+          }
+        />
+      ) : (
+        list.members.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold">Shared with</h2>
+            <ul className="flex flex-wrap gap-2">
+              {list.members.map((member) => (
+                <li key={member.userId}>
+                  <Badge variant="secondary">
+                    {member.user.name ?? member.user.email}
+                    {member.role === "VIEWER" && " · view only"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
       )}
     </div>
   );

@@ -1,11 +1,16 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-guards";
 import { requireListPermission } from "@/lib/list-access";
 import { visibilityWhere } from "@/lib/queries";
-import { batchRecipeIdsSchema, listNameSchema } from "@/lib/validations";
+import {
+  batchRecipeIdsSchema,
+  listNameSchema,
+  listRoleSchema,
+} from "@/lib/validations";
 
 function revalidateList(listId: string): void {
   revalidatePath("/lists");
@@ -154,6 +159,97 @@ export async function moveListItem(
       data: { position: current.position },
     });
   });
+
+  revalidateList(listId);
+  return { ok: true };
+}
+
+// --- Sharing ----------------------------------------------------------------
+
+/**
+ * Turn link sharing on (minting a fresh token), or off (clearing it). Owner
+ * only.
+ *
+ * Calling this again while sharing is already on **rotates** the token, which
+ * is how a link is revoked: anyone holding the old URL loses their way in,
+ * while people who already joined keep their membership.
+ */
+export async function setListShareLink(
+  listId: string,
+  enabled: boolean,
+  role: "VIEWER" | "EDITOR" = "EDITOR",
+) {
+  const user = await requireUser();
+  const parsedRole = listRoleSchema.parse(role);
+  await requireListPermission(user, listId, "OWNER");
+
+  // 32 bytes of randomness, url-safe. Long enough that the link itself is the
+  // secret — there is no other check on the join route.
+  const shareToken = enabled ? randomBytes(32).toString("base64url") : null;
+
+  await prisma.recipeList.update({
+    where: { id: listId },
+    data: { shareToken, shareRole: parsedRole },
+  });
+
+  revalidateList(listId);
+  return { shareToken };
+}
+
+/**
+ * Join a list from its share link. Any signed-in user holding the token
+ * becomes a member at the role the owner chose.
+ *
+ * The owner opening their own link is a no-op rather than an error, and an
+ * existing member keeps the role they already have — re-joining must never
+ * silently downgrade an editor to a viewer.
+ */
+export async function joinListByToken(token: string) {
+  const user = await requireUser();
+
+  const list = await prisma.recipeList.findUnique({
+    where: { shareToken: token },
+    select: { id: true, ownerId: true, shareRole: true },
+  });
+  if (!list) throw new Error("That share link is no longer valid.");
+
+  if (list.ownerId !== user.id) {
+    await prisma.recipeListMember.upsert({
+      where: { listId_userId: { listId: list.id, userId: user.id } },
+      create: { listId: list.id, userId: user.id, role: list.shareRole },
+      update: {},
+    });
+  }
+
+  revalidateList(list.id);
+  return { listId: list.id };
+}
+
+/** Change a member's role. Owner only. */
+export async function setListMemberRole(
+  listId: string,
+  userId: string,
+  role: "VIEWER" | "EDITOR",
+) {
+  const user = await requireUser();
+  const parsedRole = listRoleSchema.parse(role);
+  await requireListPermission(user, listId, "OWNER");
+
+  await prisma.recipeListMember.updateMany({
+    where: { listId, userId },
+    data: { role: parsedRole },
+  });
+
+  revalidateList(listId);
+  return { ok: true };
+}
+
+/** Remove someone from a list. Owner only. */
+export async function removeListMember(listId: string, userId: string) {
+  const user = await requireUser();
+  await requireListPermission(user, listId, "OWNER");
+
+  await prisma.recipeListMember.deleteMany({ where: { listId, userId } });
 
   revalidateList(listId);
   return { ok: true };

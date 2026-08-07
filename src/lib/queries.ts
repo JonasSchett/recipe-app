@@ -17,11 +17,38 @@ import { getListPermission, listAccessWhere } from "@/lib/list-access";
 
 /**
  * Prisma `where` fragment restricting recipes to those a user may view:
- * admins see everything; everyone else sees PUBLIC recipes plus their own.
+ * admins see everything; everyone else sees PUBLIC recipes, their own, and
+ * anything pinned to a list they own or belong to.
+ *
+ * That third branch is what makes a shared meal plan work: pinning a private
+ * recipe to a list you share lets its members **read** it. It grants read
+ * only — `assertCanModifyRecipe` is untouched, so a member still cannot edit
+ * or delete a recipe that isn't theirs — and it is scoped to lists the viewer
+ * is actually on, so it never widens access beyond people the owner invited.
+ *
+ * Everything that reads recipes funnels through here, so this one fragment is
+ * the whole of the grant.
  */
 export function visibilityWhere(user: SessionUser): Prisma.RecipeWhereInput {
   if (user.role === "ADMIN") return {};
-  return { OR: [{ visibility: "PUBLIC" }, { authorId: user.id }] };
+  return {
+    OR: [
+      { visibility: "PUBLIC" },
+      { authorId: user.id },
+      {
+        listItems: {
+          some: {
+            list: {
+              OR: [
+                { ownerId: user.id },
+                { members: { some: { userId: user.id } } },
+              ],
+            },
+          },
+        },
+      },
+    ],
+  };
 }
 
 /**
@@ -272,6 +299,28 @@ export async function getListById(id: string) {
   });
 
   return { list, permission, viewerId: user.id };
+}
+
+/**
+ * Look up a list by its share token, for the join page. Returns `null` when
+ * the token is unknown — which is the normal outcome for a revoked or rotated
+ * link, not an error.
+ *
+ * No access check: holding the token *is* the credential. Only the name and
+ * role are exposed, never the list's recipes.
+ */
+export async function getListByShareToken(token: string) {
+  if (!token) return null;
+  return prisma.recipeList.findUnique({
+    where: { shareToken: token },
+    select: {
+      id: true,
+      name: true,
+      shareRole: true,
+      owner: { select: { name: true, email: true } },
+      _count: { select: { items: true } },
+    },
+  });
 }
 
 /** The lists the user may pin into (owner or editor), for the pin picker. */
