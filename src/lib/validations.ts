@@ -62,6 +62,24 @@ export const ingredientNameSchema = z
   .min(1, "Ingredient name is required")
   .max(100);
 
+// --- Shared recipe lists ----------------------------------------------------
+
+export const listRoleSchema = z.enum(["VIEWER", "EDITOR"]);
+
+export const listNameSchema = z
+  .string()
+  .trim()
+  .min(1, "List name is required")
+  .max(80);
+
+/** Email an existing or future user is invited by. Stored lowercased. */
+export const listInviteEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Enter a valid email address")
+  .max(200);
+
 // --- Batch operations (declared last: they build on the schemas above) -------
 
 /**

@@ -20,6 +20,13 @@ enum Visibility {
   PUBLIC
 }
 
+/// What a member may do with a shared recipe list. The owner is implicit (they
+/// have no member row) and may do everything, including sharing and deleting.
+enum ListRole {
+  VIEWER
+  EDITOR
+}
+
 // ---------------------------------------------------------------------------
 // Auth.js (NextAuth) models — required by @auth/prisma-adapter.
 // ---------------------------------------------------------------------------
@@ -36,6 +43,8 @@ model User {
   recipes       Recipe[]
   heartedTags   UserHeartedTag[]
   notes         RecipeNote[]
+  ownedLists    RecipeList[]
+  listMemberships RecipeListMember[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -106,6 +115,7 @@ model Recipe {
   ingredients RecipeIngredient[]
   tags        RecipeTag[]
   notes       RecipeNote[]
+  listItems   RecipeListItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -219,6 +229,78 @@ model RecipeNote {
 
   @@id([recipeId, userId])
   @@index([userId])
+}
+
+// A named, shareable collection of recipes — "pin what we're cooking next
+// week", then share it. Membership grants READ on the recipes pinned to it
+// (see `visibilityWhere`), never write: a member can view a private recipe on
+// a list they belong to, but can still only edit their own recipes.
+model RecipeList {
+  id   String @id @default(cuid())
+  name String
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  /// Secret link sharing. Null = link sharing off; rotating it revokes old
+  /// links. `shareRole` is what opening the link grants.
+  shareToken String?  @unique
+  shareRole  ListRole @default(EDITOR)
+
+  items   RecipeListItem[]
+  members RecipeListMember[]
+  invites RecipeListInvite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model RecipeListItem {
+  listId   String
+  recipeId String
+  /// Manual ordering within the list; lowest first.
+  position Int
+  /// Who pinned it — useful on a collaborative list.
+  addedById String
+  addedAt   DateTime @default(now())
+
+  list   RecipeList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  recipe Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@id([listId, recipeId])
+  @@index([recipeId])
+}
+
+model RecipeListMember {
+  listId String
+  userId String
+  role   ListRole @default(EDITOR)
+
+  list RecipeList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([listId, userId])
+  @@index([userId])
+}
+
+// An email share for someone with no account yet. Consumed into a
+// RecipeListMember row the first time that address signs in (see the NextAuth
+// `signIn` event in `src/auth.ts`).
+model RecipeListInvite {
+  id          String   @id @default(cuid())
+  listId      String
+  /// Stored lowercased; matched case-insensitively against User.email.
+  email       String
+  role        ListRole @default(EDITOR)
+  invitedById String
+  createdAt   DateTime @default(now())
+
+  list RecipeList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, email])
+  @@index([email])
 }
 
 model UserHeartedTag {

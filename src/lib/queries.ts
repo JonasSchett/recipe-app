@@ -13,6 +13,7 @@ import {
 } from "@/lib/i18n/dictionary";
 import { withDictionary, type EntitySuggestion } from "@/lib/suggest";
 import { searchRecipeIds } from "@/lib/recipe-search";
+import { getListPermission, listAccessWhere } from "@/lib/list-access";
 
 /**
  * Prisma `where` fragment restricting recipes to those a user may view:
@@ -206,6 +207,86 @@ export async function getAllTags() {
     recipeCount: tag._count.recipes,
     hearted: heartedIds.has(tag.id),
   }));
+}
+
+/**
+ * Every list the current user can see — their own and any shared with them —
+ * newest activity first, with a few recipe images for a thumbnail strip.
+ */
+export async function getMyLists() {
+  const user = await requireUser();
+  const lists = await prisma.recipeList.findMany({
+    where: listAccessWhere(user),
+    orderBy: { updatedAt: "desc" },
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      _count: { select: { items: true, members: true } },
+      items: {
+        orderBy: { position: "asc" },
+        take: 4,
+        select: {
+          recipe: {
+            select: {
+              id: true,
+              title: true,
+              images: { orderBy: { position: "asc" }, take: 1, select: { path: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return lists.map((list) => ({
+    ...list,
+    isOwner: list.ownerId === user.id,
+  }));
+}
+
+/**
+ * One list with its recipes in pinned order, plus the caller's permission.
+ * Returns `null` when the list doesn't exist *or* isn't shared with them —
+ * the two are deliberately indistinguishable.
+ *
+ * The recipes come back through `recipeDetailInclude`, so cards render exactly
+ * as they do elsewhere (including the viewer's own note marker).
+ */
+export async function getListById(id: string) {
+  const user = await requireUser();
+  const permission = await getListPermission(user, id);
+  if (!permission) return null;
+
+  const list = await prisma.recipeList.findUniqueOrThrow({
+    where: { id },
+    include: {
+      owner: { select: { id: true, name: true, email: true, image: true } },
+      members: {
+        include: { user: { select: { id: true, name: true, email: true, image: true } } },
+      },
+      invites: { orderBy: { createdAt: "asc" } },
+      items: {
+        orderBy: { position: "asc" },
+        include: { recipe: { include: recipeDetailInclude(user.id) } },
+      },
+    },
+  });
+
+  return { list, permission, viewerId: user.id };
+}
+
+/** The lists the user may pin into (owner or editor), for the pin picker. */
+export async function getListsForPinning() {
+  const user = await requireUser();
+  return prisma.recipeList.findMany({
+    where: {
+      OR: [
+        { ownerId: user.id },
+        { members: { some: { userId: user.id, role: "EDITOR" } } },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true, _count: { select: { items: true } } },
+  });
 }
 
 /**
