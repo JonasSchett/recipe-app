@@ -108,6 +108,13 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   deps light. The mobile nav uses a `useState` toggle, not Radix Sheet.
 - Recipe images render with plain `<img>` (not `next/image`) since uploads are
   runtime files, not statically known at build.
+- The recipe form has **two** hidden file inputs feeding one `onAddImages`:
+  the picker (strict MIME allow-list, `multiple`) and the camera
+  (`capture="environment"`, `image/*`, one shot). A phone is only offered its
+  camera for a broad `accept`, hence the split. No permission code — the
+  browser/OS prompts — and no secure context needed, unlike `getUserMedia`, so
+  it works over plain http on the LAN. Desktop ignores `capture` and shows a
+  picker.
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
 - **Autocomplete** for ingredient/tag entry: `src/lib/suggest.ts` is the pure
   matcher (fold = lowercase + `ß`→`ss` + diacritics dropped, plus an `ue`-style

@@ -47,6 +47,16 @@ export async function saveRecipeImage(file: File): Promise<string> {
   }
   const ext = ALLOWED_IMAGE_TYPES[file.type];
   if (!ext) {
+    // Reachable from a phone: taking a photo yields JPEG, but picking an
+    // existing one from an iPhone's library can hand us HEIC. Name it, since
+    // "unsupported type: image/heic" gives the user nothing to act on.
+    // (Proper support needs a converter — see PLAN.md §8.1, sharp.)
+    if (/^image\/hei[cf]$/.test(file.type)) {
+      throw new Error(
+        "HEIC photos aren't supported yet. Take the picture with the camera " +
+          "button, or save it as JPEG first.",
+      );
+    }
     throw new Error(`Unsupported image type: ${file.type || "unknown"}.`);
   }
 

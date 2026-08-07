@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Camera,
   ImagePlus,
   Plus,
   ScanText,
@@ -92,6 +93,7 @@ export function RecipeForm({
   // Ordered gallery of already-uploaded image paths; index 0 is the hero image.
   const [images, setImages] = useState<string[]>(initial.imagePaths);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   // Paths present when the form loaded — these belong to the saved recipe, so we
   // defer deleting their files to updateRecipe rather than discarding on remove.
   const initialImagePaths = useRef(new Set(initial.imagePaths));
@@ -565,20 +567,50 @@ export function RecipeForm({
           className="hidden"
           onChange={onAddImages}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => imageInputRef.current?.click()}
-          disabled={imageBusy}
-        >
-          <ImagePlus className="h-4 w-4" />
-          {imageBusy ? "Uploading…" : "Add images"}
-        </Button>
+        {/*
+          Camera capture. `capture="environment"` asks a phone to open the rear
+          camera directly instead of the file picker; the browser/OS handles the
+          permission prompt, so there is nothing to request here. Desktop
+          browsers ignore the attribute and just show a picker, which is a fine
+          fallback. Kept as a separate input because it also needs the broader
+          `image/*` accept (a phone camera is not offered for a MIME allow-list)
+          and takes one shot at a time.
+        */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={onAddImages}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={imageBusy}
+          >
+            <ImagePlus className="h-4 w-4" />
+            {imageBusy ? "Uploading…" : "Add images"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={imageBusy}
+          >
+            <Camera className="h-4 w-4" />
+            Take photo
+          </Button>
+        </div>
         <p className="text-xs text-muted-foreground">
           JPEG, PNG, WebP or GIF, up to 5 MB each. The first image is the hero
-          shown on cards — reorder with the arrows. Use “Extract text” to OCR a
-          photo of a recipe into the instructions above.
+          shown on cards — reorder with the arrows. “Take photo” opens the camera
+          on a phone. Use “Extract text” to OCR a photo of a recipe into the
+          instructions above.
         </p>
       </div>
 
