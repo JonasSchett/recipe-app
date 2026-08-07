@@ -198,6 +198,18 @@ export async function getAllTags() {
   }));
 }
 
+/**
+ * The current user's settings (see /account). Read fresh from the row rather
+ * than the session so a change takes effect on the very next render.
+ */
+export async function getUserSettings() {
+  const user = await requireUser();
+  return prisma.user.findUniqueOrThrow({
+    where: { id: user.id },
+    select: { defaultRecipeVisibility: true },
+  });
+}
+
 /** All users with their role and recipe count, for the admin console. */
 export async function getAllUsers() {
   await requireAdmin();

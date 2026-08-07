@@ -66,37 +66,45 @@ const NO_VOCABULARY: RecipeFormVocabulary = { ingredients: [], tags: [] };
 export function RecipeForm({
   mode,
   recipeId,
-  initial = EMPTY,
+  initial,
   vocabulary = NO_VOCABULARY,
+  defaultVisibility = "PRIVATE",
 }: {
   mode: "create" | "edit";
   recipeId?: string;
   initial?: RecipeFormInitial;
   vocabulary?: RecipeFormVocabulary;
+  /**
+   * Where the visibility checkbox starts on a blank form, from the author's
+   * account settings. Ignored when `initial` is given — an existing recipe's
+   * own visibility always wins, so editing can never silently republish it.
+   */
+  defaultVisibility?: "PRIVATE" | "PUBLIC";
 }) {
   const router = useRouter();
+  const start = initial ?? { ...EMPTY, visibility: defaultVisibility };
 
-  const [title, setTitle] = useState(initial.title);
-  const [description, setDescription] = useState(initial.description);
-  const [instructions, setInstructions] = useState(initial.instructions);
-  const [isPublic, setIsPublic] = useState(initial.visibility === "PUBLIC");
+  const [title, setTitle] = useState(start.title);
+  const [description, setDescription] = useState(start.description);
+  const [instructions, setInstructions] = useState(start.instructions);
+  const [isPublic, setIsPublic] = useState(start.visibility === "PUBLIC");
   const [ingredients, setIngredients] = useState<IngredientRow[]>(
-    initial.ingredients.map((i) => ({
+    start.ingredients.map((i) => ({
       name: i.name,
       quantity: i.quantity?.toString() ?? "",
       unit: i.unit ?? "",
     })),
   );
-  const [tags, setTags] = useState<string[]>(initial.tags);
+  const [tags, setTags] = useState<string[]>(start.tags);
   const [tagDraft, setTagDraft] = useState("");
 
   // Ordered gallery of already-uploaded image paths; index 0 is the hero image.
-  const [images, setImages] = useState<string[]>(initial.imagePaths);
+  const [images, setImages] = useState<string[]>(start.imagePaths);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   // Paths present when the form loaded — these belong to the saved recipe, so we
   // defer deleting their files to updateRecipe rather than discarding on remove.
-  const initialImagePaths = useRef(new Set(initial.imagePaths));
+  const initialImagePaths = useRef(new Set(start.imagePaths));
   const [imageBusy, setImageBusy] = useState(false);
   const [ocrBusyPath, setOcrBusyPath] = useState<string | null>(null);
   const [detectBusy, setDetectBusy] = useState(false);

@@ -42,6 +42,16 @@ export const recipeFilterSchema = z.object({
 
 export type RecipeFilter = z.infer<typeof recipeFilterSchema>;
 
+/**
+ * Per-user settings editable on /account. Every field is optional so a caller
+ * can update one setting without restating the others.
+ */
+export const userSettingsSchema = z.object({
+  defaultRecipeVisibility: visibilitySchema.optional(),
+});
+
+export type UserSettingsInput = z.infer<typeof userSettingsSchema>;
+
 export const tagNameSchema = z.string().trim().min(1, "Tag name is required").max(50);
 export const ingredientNameSchema = z
   .string()

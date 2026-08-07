@@ -9,13 +9,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UserSettingsForm } from "@/components/user-settings-form";
 import { getCurrentUser } from "@/lib/auth-guards";
+import { getUserSettings } from "@/lib/queries";
 import { signOutAction } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 
 export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  const settings = await getUserSettings();
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6">
@@ -45,6 +49,18 @@ export default async function AccountPage() {
               Sign out
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Settings</CardTitle>
+          <CardDescription>Preferences that apply to your account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UserSettingsForm
+            defaultRecipeVisibility={settings.defaultRecipeVisibility}
+          />
         </CardContent>
       </Card>
     </div>

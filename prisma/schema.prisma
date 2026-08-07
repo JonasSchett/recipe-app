@@ -37,6 +37,16 @@ model User {
   heartedTags   UserHeartedTag[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+
+  // --- Per-user settings (see /account) -------------------------------------
+  // Kept as columns rather than a separate settings table: database sessions
+  // already hand the session callback the full user row, so a new column costs
+  // no extra query and has no "settings row missing" case to handle.
+
+  /// Pre-selects the visibility on the create-recipe form. A form default only
+  /// — the schema default below and the Zod default both stay PRIVATE, so a
+  /// payload that omits visibility can never publish by accident.
+  defaultRecipeVisibility Visibility @default(PRIVATE)
 }
 
 model Account {
