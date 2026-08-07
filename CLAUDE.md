@@ -147,6 +147,16 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   which `migrate deploy` applies on the production DB too. `FUZZY_THRESHOLD`
   there is set below Postgres' 0.6 default on purpose; see its comment before
   changing it.
+- **Batch editing**: `RecipeSelectionProvider` (rendered by `RecipeBrowser`)
+  holds the selected ids; because its position in the tree is stable across
+  same-route navigations, a selection survives paging. `SelectableCard` wraps
+  the server-rendered card and covers it with a click-swallowing button while
+  selection mode is on, so `RecipeCard` stays untouched. Actions live in
+  `lib/actions/batch.ts`: they resolve tags/ingredients **once** per batch (not
+  per recipe — `resolveTags` is several queries and can create alias rows),
+  write joins with `skipDuplicates`, and silently skip recipes the user can't
+  modify, returning `{ updated, skipped }` for the bar to report. Adding an
+  ingredient never overwrites a recipe's existing quantity.
 - The filterable list lives in `RecipeBrowser` (server) + `RecipeFilters`
   (client, URL-driven: `?q=&tags=a,b&ingredients=c`), shared by `/` and
   `/recipes`. The dashboard `/` adds hearted-tag sections above it; those rows
