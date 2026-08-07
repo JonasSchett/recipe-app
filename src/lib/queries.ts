@@ -23,16 +23,26 @@ export function visibilityWhere(user: SessionUser): Prisma.RecipeWhereInput {
   return { OR: [{ visibility: "PUBLIC" }, { authorId: user.id }] };
 }
 
-/** Include shape returning a recipe with its author, ingredients, and tags. */
-const recipeDetailInclude = {
-  author: { select: { id: true, name: true, email: true, image: true } },
-  images: { orderBy: { position: "asc" } },
-  ingredients: { include: { ingredient: true } },
-  tags: { include: { tag: true } },
-} satisfies Prisma.RecipeInclude;
+/**
+ * Include shape returning a recipe with its author, ingredients, tags — and the
+ * viewer's own note, if any.
+ *
+ * Takes the viewer's id because notes are private: the `where` here is the only
+ * thing that keeps one user's notes out of another's payload, so every caller
+ * must pass the *current* user's id and never a recipe author's.
+ */
+function recipeDetailInclude(userId: string) {
+  return {
+    author: { select: { id: true, name: true, email: true, image: true } },
+    images: { orderBy: { position: "asc" } },
+    ingredients: { include: { ingredient: true } },
+    tags: { include: { tag: true } },
+    notes: { where: { userId }, take: 1 },
+  } satisfies Prisma.RecipeInclude;
+}
 
 export type RecipeDetail = Prisma.RecipeGetPayload<{
-  include: typeof recipeDetailInclude;
+  include: ReturnType<typeof recipeDetailInclude>;
 }>;
 
 /**
@@ -70,7 +80,7 @@ export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
     const rankOf = new Map(ranked.map((row, index) => [row.id, index]));
     const matches = await prisma.recipe.findMany({
       where,
-      include: recipeDetailInclude,
+      include: recipeDetailInclude(user.id),
     });
     matches.sort((a, b) => rankOf.get(a.id)! - rankOf.get(b.id)!);
 
@@ -86,7 +96,7 @@ export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
   const [items, total] = await Promise.all([
     prisma.recipe.findMany({
       where,
-      include: recipeDetailInclude,
+      include: recipeDetailInclude(user.id),
       orderBy: { title: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -108,7 +118,7 @@ export async function getRecipeById(id: string): Promise<RecipeDetail | null> {
   const user = await requireUser();
   const recipe = await prisma.recipe.findFirst({
     where: { AND: [{ id }, visibilityWhere(user)] },
-    include: recipeDetailInclude,
+    include: recipeDetailInclude(user.id),
   });
   return recipe;
 }
@@ -130,7 +140,7 @@ export async function getHeartedTagSections(take = 12) {
       tag,
       recipes: await prisma.recipe.findMany({
         where: { AND: [visibilityWhere(user), { tags: { some: { tagId: tag.id } } }] },
-        include: recipeDetailInclude,
+        include: recipeDetailInclude(user.id),
         orderBy: { updatedAt: "desc" },
         take,
       }),

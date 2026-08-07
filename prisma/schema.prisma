@@ -35,6 +35,7 @@ model User {
   sessions      Session[]
   recipes       Recipe[]
   heartedTags   UserHeartedTag[]
+  notes         RecipeNote[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -104,6 +105,7 @@ model Recipe {
   images      RecipeImage[]
   ingredients RecipeIngredient[]
   tags        RecipeTag[]
+  notes       RecipeNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -199,6 +201,24 @@ model RecipeTag {
 
   @@id([recipeId, tagId])
   @@index([tagId])
+}
+
+// A private notepad, one per (user, recipe) — not a comment thread. Anyone who
+// can *view* a recipe may note it, including on someone else's recipe ("halve
+// the sugar", "cooked 2026-08-01, needed 10 min longer"). A note is only ever
+// readable by its author: no query exposes another user's notes.
+model RecipeNote {
+  recipeId  String
+  userId    String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, userId])
+  @@index([userId])
 }
 
 model UserHeartedTag {

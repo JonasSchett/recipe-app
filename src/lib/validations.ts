@@ -42,6 +42,9 @@ export const recipeFilterSchema = z.object({
 
 export type RecipeFilter = z.infer<typeof recipeFilterSchema>;
 
+/** Body of a personal recipe note. Empty means "delete the note". */
+export const recipeNoteSchema = z.string().trim().max(5000);
+
 /**
  * Per-user settings editable on /account. Every field is optional so a caller
  * can update one setting without restating the others.

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { KeepScreenAwake } from "@/components/keep-screen-awake";
 import { RecipeActions } from "@/components/recipe-actions";
 import { RecipeGallery } from "@/components/recipe-gallery";
+import { RecipeNote } from "@/components/recipe-note";
 import { getCurrentUser, isAdmin } from "@/lib/auth-guards";
 import { getRecipeById } from "@/lib/queries";
 
@@ -78,6 +79,13 @@ export default async function RecipePage({
           </p>
         </section>
       )}
+
+      {/* Scoped to the viewer by `recipeDetailInclude`, so this is only ever
+          their own note — never the author's. */}
+      <RecipeNote
+        recipeId={recipe.id}
+        initialBody={recipe.notes[0]?.body ?? null}
+      />
     </article>
   );
 }
