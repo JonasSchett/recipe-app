@@ -27,7 +27,17 @@ read at runtime from `.env`, never baked in. `AUTH_ALLOWED_EMAILS` (optional,
 comma-separated) restricts who may sign in via Google.
 
 After changing `prisma/schema.prisma`, run `npm run db:migrate` and commit the
-generated migration under `prisma/migrations/`.
+generated migration under `prisma/migrations/`. `db:migrate` also runs
+`prisma generate`, so **restart `npm run dev`** afterwards or it keeps the old
+client.
+
+For SQL Prisma can't express (extensions, functional indexes), use
+`npx prisma migrate dev --create-only --name x`, hand-edit the generated
+`migration.sql`, then apply with `npm run db:migrate`. Rewriting a migration
+that has **already been applied** breaks its checksum — fix with
+`DELETE FROM _prisma_migrations WHERE migration_name = '…'` followed by
+`npx prisma migrate resolve --applied <name>`, and only ever on a migration
+that hasn't left this machine.
 
 ## Stack & deliberate version choices
 
@@ -104,6 +114,10 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
 - **Local sign-in:** Google needs real credentials, so the `/login` page also
   has a **dev-only** sign-in (`src/lib/actions/dev-auth.ts`) that creates a real
   DB Session + sets the `authjs.session-token` cookie. Gated to non-production.
+  It **upserts the role**, so signing in as an existing email with the role set
+  to `USER` demotes that account — the form defaults to `ADMIN` for that reason.
+  It also bypasses NextAuth entirely, so anything hooked to the `signIn` event
+  (admin bootstrap, list-invite consumption) has to be called here too.
 - shadcn primitives in `src/components/ui` are hand-written (no Radix) to keep
   deps light. The mobile nav uses a `useState` toggle, not Radix Sheet.
 - Recipe images render with plain `<img>` (not `next/image`) since uploads are
