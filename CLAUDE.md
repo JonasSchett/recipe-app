@@ -147,6 +147,16 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   which `migrate deploy` applies on the production DB too. `FUZZY_THRESHOLD`
   there is set below Postgres' 0.6 default on purpose; see its comment before
   changing it.
+- **Pinned lists** (`RecipeList`): named, shareable recipe collections.
+  Authorization funnels through `lib/list-access.ts` (`getListPermission` /
+  `requireListPermission`, OWNER > EDITOR > VIEWER); "no such list" and "no
+  access" raise the same error so ids can't be probed, and **admins get no
+  blanket access** — a list is social, not library content. Sharing is by
+  secret link (`shareToken`, rotate to revoke) *and* by email; an email with no
+  account yet becomes a `RecipeListInvite`, consumed in the NextAuth `signIn`
+  event (and in `dev-auth.ts`, which bypasses NextAuth). **Membership grants
+  READ on pinned recipes** via the third branch of `visibilityWhere` — never
+  write, since `assertCanModifyRecipe` is unchanged.
 - **Batch editing**: `RecipeSelectionProvider` (rendered by `RecipeBrowser`)
   holds the selected ids; because its position in the tree is stable across
   same-route navigations, a selection survives paging. `SelectableCard` wraps

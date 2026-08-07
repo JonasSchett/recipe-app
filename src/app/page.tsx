@@ -4,7 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipe-card";
 import { RecipeBrowser } from "@/components/recipe-browser";
 import { getCurrentUser } from "@/lib/auth-guards";
-import { getHeartedTagSections } from "@/lib/queries";
+import { getHeartedTagSections, getMyLists } from "@/lib/queries";
 
 function parseList(value?: string): string[] {
   return value ? value.split(",").filter(Boolean) : [];
@@ -38,10 +38,65 @@ export default async function Home({
   }
 
   const { q, tags, ingredients, page } = await searchParams;
-  const sections = await getHeartedTagSections();
+  const [sections, lists] = await Promise.all([
+    getHeartedTagSections(),
+    getMyLists(),
+  ]);
+  // The most recently touched list only. The dashboard is for "what am I
+  // cooking now" — a wall of every list belongs on /lists.
+  const currentList = lists.find((list) => list._count.items > 0);
 
   return (
     <div className="flex flex-col gap-10">
+      {/* What's pinned right now, above everything else. */}
+      {currentList && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-xl font-semibold tracking-tight">
+              {currentList.name}
+            </h2>
+            <Link
+              href={`/lists/${currentList.id}`}
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              Open list
+            </Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {currentList.items.map(({ recipe }) => (
+              <Link
+                key={recipe.id}
+                href={`/recipes/${recipe.id}`}
+                className="flex w-40 shrink-0 flex-col gap-2"
+              >
+                {recipe.images[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- runtime-uploaded files
+                  <img
+                    src={recipe.images[0].path}
+                    alt={recipe.title}
+                    className="h-28 w-40 rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="h-28 w-40 rounded-lg bg-muted" />
+                )}
+                <span className="line-clamp-2 text-sm font-medium">
+                  {recipe.title}
+                </span>
+              </Link>
+            ))}
+            {currentList._count.items > currentList.items.length && (
+              <Link
+                href={`/lists/${currentList.id}`}
+                className="flex w-40 shrink-0 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-accent/40"
+              >
+                +{currentList._count.items - currentList.items.length} more
+              </Link>
+            )}
+          </div>
+          <hr className="border-border" />
+        </section>
+      )}
+
       {/* Personalized sections, one per hearted tag. */}
       {sections.length > 0 ? (
         <div className="flex flex-col gap-8">

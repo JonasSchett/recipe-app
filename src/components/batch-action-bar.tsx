@@ -2,13 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Carrot, CheckSquare, Plus, Tags, Trash2, X } from "lucide-react";
+import { Carrot, CheckSquare, Pin, Plus, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
 import { useSelection } from "@/components/recipe-selection";
 import { addIngredientsToRecipes, addTagsToRecipes } from "@/lib/actions/batch";
+import { addRecipesToList } from "@/lib/actions/lists";
+import type { PinnableList } from "@/components/pin-to-list";
 import type { EntitySuggestion } from "@/lib/suggest";
 
 type IngredientRow = { name: string; quantity: string; unit: string };
@@ -44,14 +46,16 @@ export function BatchActionBar({
   pageRecipeIds,
   tagVocabulary = [],
   ingredientVocabulary = [],
+  pinnableLists = [],
 }: {
   pageRecipeIds: string[];
   tagVocabulary?: EntitySuggestion[];
   ingredientVocabulary?: EntitySuggestion[];
+  pinnableLists?: PinnableList[];
 }) {
   const router = useRouter();
   const { active, selected, selectMany, clear, setActive } = useSelection();
-  const [panel, setPanel] = useState<null | "tags" | "ingredients">(null);
+  const [panel, setPanel] = useState<null | "tags" | "ingredients" | "lists">(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [rows, setRows] = useState<IngredientRow[]>([
@@ -135,6 +139,30 @@ export function BatchActionBar({
         }),
       "Failed to add ingredients.",
     );
+  }
+
+  /**
+   * Pinning reports differently from tagging: the list action skips recipes
+   * the user can't *see* (and ones already pinned), not ones they can't edit,
+   * so "not yours" would be the wrong words.
+   */
+  function pinToList(listId: string, listName: string) {
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const result = await addRecipesToList(listId, [...selected]);
+        setMessage(
+          `Pinned ${result.added} recipe${result.added === 1 ? "" : "s"} to ${listName}` +
+            (result.skipped > 0 ? ` · ${result.skipped} already there` : ""),
+        );
+        closePanel();
+        clear();
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not pin them.");
+      }
+    });
   }
 
   function updateRow(index: number, patch: Partial<IngredientRow>) {
@@ -298,6 +326,46 @@ export function BatchActionBar({
           </div>
         )}
 
+        {panel === "lists" && (
+          <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-2 border-b pb-3">
+            {pinnableLists.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                You don&apos;t have any lists to pin into yet — create one on the
+                Pinned Lists page.
+              </p>
+            ) : (
+              <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                {pinnableLists.map((list) => (
+                  <li key={list.id}>
+                    <button
+                      type="button"
+                      onClick={() => pinToList(list.id, list.name)}
+                      disabled={pending}
+                      className="flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
+                    >
+                      <span className="truncate font-medium">{list.name}</span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {list._count.items}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="self-start"
+              onClick={closePanel}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+        )}
+
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2">
           <span className="text-sm font-medium">
             {count} selected
@@ -330,6 +398,18 @@ export function BatchActionBar({
               disabled={count === 0}
             >
               <Carrot className="h-4 w-4" /> Add ingredients
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMessage(null);
+                setPanel(panel === "lists" ? null : "lists");
+              }}
+              disabled={count === 0}
+            >
+              <Pin className="h-4 w-4" /> Add to list
             </Button>
             <Button
               type="button"

@@ -9,6 +9,7 @@ import {
   getAllIngredients,
   getAllTags,
   getEntityVocabulary,
+  getListsForPinning,
   getRecipes,
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -31,12 +32,14 @@ export async function RecipeBrowser({
   ingredientIds?: string[];
   page?: number;
 }) {
-  const [result, allTags, allIngredients, vocabulary] = await Promise.all([
-    getRecipes({ search, tagIds, ingredientIds, page }),
-    getAllTags(),
-    getAllIngredients(),
-    getEntityVocabulary(),
-  ]);
+  const [result, allTags, allIngredients, vocabulary, pinnableLists] =
+    await Promise.all([
+      getRecipes({ search, tagIds, ingredientIds, page }),
+      getAllTags(),
+      getAllIngredients(),
+      getEntityVocabulary(),
+      getListsForPinning(),
+    ]);
   const { items, total, page: current, pageCount } = result;
 
   const pageHref = (p: number) => {
@@ -133,6 +136,7 @@ export async function RecipeBrowser({
           pageRecipeIds={items.map((recipe) => recipe.id)}
           tagVocabulary={vocabulary.tags}
           ingredientVocabulary={vocabulary.ingredients}
+          pinnableLists={pinnableLists}
         />
       </div>
     </RecipeSelectionProvider>

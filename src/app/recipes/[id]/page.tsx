@@ -4,8 +4,9 @@ import { KeepScreenAwake } from "@/components/keep-screen-awake";
 import { RecipeActions } from "@/components/recipe-actions";
 import { RecipeGallery } from "@/components/recipe-gallery";
 import { RecipeNote } from "@/components/recipe-note";
+import { PinToList } from "@/components/pin-to-list";
 import { getCurrentUser, isAdmin } from "@/lib/auth-guards";
-import { getRecipeById } from "@/lib/queries";
+import { getListsForPinning, getRecipeById } from "@/lib/queries";
 
 export default async function RecipePage({
   params,
@@ -20,6 +21,8 @@ export default async function RecipePage({
   if (!recipe) notFound();
 
   const canModify = isAdmin(user) || recipe.authorId === user.id;
+  // Anyone who can see a recipe can pin it — including one shared with them.
+  const pinnableLists = await getListsForPinning();
 
   return (
     <article className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -50,6 +53,8 @@ export default async function RecipePage({
           </div>
         )}
       </header>
+
+      <PinToList recipeId={recipe.id} lists={pinnableLists} />
 
       {canModify && (
         <RecipeActions recipeId={recipe.id} visibility={recipe.visibility} />
