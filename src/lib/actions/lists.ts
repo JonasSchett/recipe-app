@@ -8,6 +8,7 @@ import { requireListPermission } from "@/lib/list-access";
 import { visibilityWhere } from "@/lib/queries";
 import {
   batchRecipeIdsSchema,
+  listInviteEmailSchema,
   listNameSchema,
   listRoleSchema,
 } from "@/lib/validations";
@@ -223,6 +224,72 @@ export async function joinListByToken(token: string) {
 
   revalidateList(list.id);
   return { listId: list.id };
+}
+
+/**
+ * Share a list with an email address. Owner only.
+ *
+ * If that address already has an account they become a member immediately and
+ * the list simply appears under "Shared with me" next time they load the app.
+ * If it doesn't, the share is held as a `RecipeListInvite` and consumed the
+ * first time they sign in (see `consumePendingListInvites`, wired into the
+ * NextAuth `signIn` event) — so you can share with someone before they have
+ * ever used the app.
+ */
+export async function shareListWithEmail(
+  listId: string,
+  email: string,
+  role: "VIEWER" | "EDITOR" = "EDITOR",
+) {
+  const user = await requireUser();
+  const parsedEmail = listInviteEmailSchema.parse(email);
+  const parsedRole = listRoleSchema.parse(role);
+  await requireListPermission(user, listId, "OWNER");
+
+  // Google decides the casing of a stored address, so match case-insensitively
+  // rather than trusting it to equal the lowercased input.
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: parsedEmail, mode: "insensitive" } },
+    select: { id: true },
+  });
+
+  if (existing) {
+    if (existing.id === user.id) {
+      throw new Error("You already own this list.");
+    }
+    await prisma.recipeListMember.upsert({
+      where: { listId_userId: { listId, userId: existing.id } },
+      create: { listId, userId: existing.id, role: parsedRole },
+      // Re-sharing with an existing member updates their role, which is what
+      // the owner just asked for by picking one.
+      update: { role: parsedRole },
+    });
+    revalidateList(listId);
+    return { status: "added" as const, email: parsedEmail };
+  }
+
+  await prisma.recipeListInvite.upsert({
+    where: { listId_email: { listId, email: parsedEmail } },
+    create: { listId, email: parsedEmail, role: parsedRole, invitedById: user.id },
+    update: { role: parsedRole },
+  });
+
+  revalidateList(listId);
+  return { status: "invited" as const, email: parsedEmail };
+}
+
+/** Withdraw a pending email invite. Owner only. */
+export async function revokeListInvite(listId: string, email: string) {
+  const user = await requireUser();
+  const parsedEmail = listInviteEmailSchema.parse(email);
+  await requireListPermission(user, listId, "OWNER");
+
+  await prisma.recipeListInvite.deleteMany({
+    where: { listId, email: parsedEmail },
+  });
+
+  revalidateList(listId);
+  return { ok: true };
 }
 
 /** Change a member's role. Owner only. */

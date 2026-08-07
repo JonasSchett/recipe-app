@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
+import { consumePendingListInvites } from "@/lib/list-invites";
 
 /** Parse a comma-separated env list of emails into lowercased, trimmed entries. */
 function parseEmailList(value: string | undefined): string[] {
@@ -58,6 +59,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           data: { role: "ADMIN" },
         });
       }
+      // Settle any list shares sent to this address before they had an
+      // account. Same hook, same guarantee: the user row exists by now.
+      if (user.id) await consumePendingListInvites(user.id, user.email);
     },
   },
 });

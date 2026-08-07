@@ -2,14 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Copy, Link2, RefreshCw, Share2, UserMinus } from "lucide-react";
+import { Copy, Link2, Mail, RefreshCw, Share2, UserMinus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   removeListMember,
+  revokeListInvite,
   setListMemberRole,
   setListShareLink,
+  shareListWithEmail,
 } from "@/lib/actions/lists";
 
 type Member = {
@@ -17,6 +19,8 @@ type Member = {
   role: "VIEWER" | "EDITOR";
   user: { id: string; name: string | null; email: string | null };
 };
+
+type Invite = { id: string; email: string; role: "VIEWER" | "EDITOR" };
 
 /**
  * Owner-only sharing controls: the secret link, and who currently has access.
@@ -26,18 +30,22 @@ export function ListSharePanel({
   shareToken,
   shareRole,
   members,
+  invites,
   privateRecipeCount,
 }: {
   listId: string;
   shareToken: string | null;
   shareRole: "VIEWER" | "EDITOR";
   members: Member[];
+  invites: Invite[];
   privateRecipeCount: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [email, setEmail] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
 
   const shareUrl = shareToken
     ? `${typeof window === "undefined" ? "" : window.location.origin}/lists/join/${shareToken}`
@@ -166,6 +174,83 @@ export function ListSharePanel({
           </div>
         )}
       </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Share by email</span>
+        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const value = email.trim();
+            if (!value) return;
+            setError(null);
+            setNotice(null);
+            startTransition(async () => {
+              try {
+                const result = await shareListWithEmail(listId, value, "EDITOR");
+                setEmail("");
+                setNotice(
+                  result.status === "added"
+                    ? `${result.email} now has access.`
+                    : `${result.email} has no account yet — they'll get access the first time they sign in.`,
+                );
+                router.refresh();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Could not share.");
+              }
+            });
+          }}
+        >
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            aria-label="Email to share with"
+          />
+          <Button type="submit" variant="outline" disabled={pending || !email.trim()}>
+            Share
+          </Button>
+        </form>
+        {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
+      </div>
+
+      {invites.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Pending invites</span>
+          <ul className="flex flex-col gap-2">
+            {invites.map((invite) => (
+              <li
+                key={invite.id}
+                className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm">
+                  {invite.email}
+                </span>
+                <Badge variant="outline">Joins on first sign-in</Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={pending}
+                  aria-label={`Revoke invite for ${invite.email}`}
+                  onClick={() =>
+                    run(
+                      () => revokeListInvite(listId, invite.email),
+                      "Could not revoke the invite.",
+                    )
+                  }
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {members.length > 0 && (
         <div className="flex flex-col gap-2">

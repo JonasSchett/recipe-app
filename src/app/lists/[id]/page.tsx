@@ -90,6 +90,7 @@ export default async function ListPage({
           shareToken={list.shareToken}
           shareRole={list.shareRole}
           members={list.members}
+          invites={list.invites}
           privateRecipeCount={
             list.items.filter((item) => item.recipe.visibility === "PRIVATE")
               .length

@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { consumePendingListInvites } from "@/lib/list-invites";
 
 /**
  * DEVELOPMENT-ONLY sign-in. Google OAuth requires external setup, so this lets
@@ -24,6 +25,11 @@ export async function devSignIn(formData: FormData) {
     update: { role },
     create: { email, name: email.split("@")[0], role },
   });
+
+  // The real sign-in settles pending list invites in the NextAuth `signIn`
+  // event, which this path never reaches — do the same here so dev behaves
+  // like production.
+  await consumePendingListInvites(user.id, user.email);
 
   const sessionToken = randomUUID();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
