@@ -55,6 +55,7 @@ export function Navbar({ user }: { user: NavUser }) {
 
   const authedLinks = [
     { href: "/recipes", label: "All Recipes" },
+    { href: "/lists", label: "Pinned Lists" },
     { href: "/favourite-tags", label: "Favourite Tags" },
     { href: "/recipes/new", label: "Create Recipe" },
     { href: "/tags", label: "All Tags" },
