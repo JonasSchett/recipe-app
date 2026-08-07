@@ -109,24 +109,34 @@ action + panel; (c) batch ingredient action + panel.
 
 ---
 
-## 2. Search over instruction text
+## 2. Search over instruction text — **done** (`621a441`)
 
-One addition to the `OR` block in `getRecipes` (`queries.ts`):
+Grew past the intended one-liner: adding `instructions` to the existing
+`contains` block was the easy half, but review raised fuzzy matching, which
+`contains` cannot do at all. Built instead as `src/lib/recipe-search.ts`:
 
-```ts
-{ instructions: { contains: search, mode: "insensitive" } }
-```
+- **Prefilter architecture.** Raw SQL returns recipe ids ranked by relevance;
+  `getRecipes` applies them as `id IN (…)`, so visibility, tag/ingredient
+  filters and the typed includes are untouched. All the messy text matching is
+  isolated in one module.
+- **Folding, then trigrams.** Both sides are folded exactly as
+  `lib/suggest.ts` folds for the autocomplete (both keys — plain and
+  umlaut-expanded), so "suss", "suess" and "süß" all reach "süß". Trigram
+  similarity on top absorbs typos. Folding is what handles umlauts: trigrams
+  alone cannot, since "puree"/"püree" share too few triplets in a word that
+  short.
+- **Threshold 0.45**, chosen from measured pairs, not taste: real typos scored
+  0.50–0.80, unrelated pairs ≤0.25. Postgres' 0.6 default sat on top of
+  ordinary misspellings ("spagetti"/"spaghetti" = 0.58).
+- **Relevance ordering** while searching (title beats description beats
+  instructions), alphabetical without a search.
+- **Migration** creates the `pg_trgm` and `unaccent` extensions. No indexes:
+  the comparison is against folded expressions, which an index on the raw
+  columns could never serve. A search is therefore one scan — negligible at
+  household scale. If it ever isn't, materialize the folded text as a stored
+  column maintained on write and put a GIN trigram index on that.
 
-That's the whole feature. Notes on it:
-
-- **Performance:** `contains` on a `@db.Text` column is a sequential scan.
-  At home-server scale (hundreds of recipes) this is irrelevant. If it ever
-  bites, the fix is a `pg_trgm` GIN index added via a raw-SQL migration —
-  noted here, not built.
-- Description is already searched; instructions were the obvious gap.
-- Feature 3 extends this same block with the user's own notes.
-
-**Commit:** one, small.
+Feature 3 extends the same module with the user's own notes.
 
 ---
 
@@ -432,7 +442,7 @@ lands last on a settled foundation:
 
 | # | Feature | Migration | Notes |
 |---|---------|-----------|-------|
-| 1 | F2 — search over instructions | — | one-liner |
+| 1 | F2 — search over instructions | ✅ | ✅ done — fuzzy, see above |
 | 2 | F6 — camera capture | — | self-contained |
 | 3 | F4 — settings + default visibility | ✅ | builds the settings surface |
 | 4 | F3 — notes | ✅ | extends search from step 1 |

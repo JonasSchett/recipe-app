@@ -12,6 +12,7 @@ import {
   TAG_TRANSLATIONS,
 } from "@/lib/i18n/dictionary";
 import { withDictionary, type EntitySuggestion } from "@/lib/suggest";
+import { searchRecipeIds } from "@/lib/recipe-search";
 
 /**
  * Prisma `where` fragment restricting recipes to those a user may view:
@@ -35,60 +36,52 @@ export type RecipeDetail = Prisma.RecipeGetPayload<{
 }>;
 
 /**
- * Paginated, alphabetical list of recipes the current user may view, optionally
- * narrowed by search text and by tags/ingredients (AND across every selection).
+ * Paginated list of recipes the current user may view, optionally narrowed by
+ * search text and by tags/ingredients (AND across every selection).
+ *
+ * Search is fuzzy (see `lib/recipe-search.ts`): it matches the title,
+ * description and instructions plus any localized tag/ingredient alias, and
+ * tolerates typos and missing umlauts. A search is ordered by relevance;
+ * without one the list stays alphabetical.
  */
 export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
   const user = await requireUser();
   const { search, tagIds, ingredientIds, page, pageSize } =
     recipeFilterSchema.parse(filter);
 
+  // The fuzzy pass runs first and yields ranked ids, which then act as one more
+  // filter here — so visibility and the tag/ingredient selections still decide
+  // what is actually returned.
+  const ranked = search ? await searchRecipeIds(search) : null;
+
   const where: Prisma.RecipeWhereInput = {
     AND: [
       visibilityWhere(user),
-      ...(search
-        ? [
-            {
-              OR: [
-                { title: { contains: search, mode: "insensitive" as const } },
-                { description: { contains: search, mode: "insensitive" as const } },
-                // Cross-lingual: match any localized ingredient/tag alias. Since
-                // each entity carries both its English and German names,
-                // searching "Onion" finds a recipe that stored "Zwiebel".
-                {
-                  ingredients: {
-                    some: {
-                      ingredient: {
-                        names: {
-                          some: {
-                            normalized: { contains: search.toLowerCase() },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                {
-                  tags: {
-                    some: {
-                      tag: {
-                        names: {
-                          some: {
-                            normalized: { contains: search.toLowerCase() },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              ],
-            },
-          ]
-        : []),
+      ...(ranked ? [{ id: { in: ranked.map((row) => row.id) } }] : []),
       ...tagIds.map((tagId) => ({ tags: { some: { tagId } } })),
       ...ingredientIds.map((ingredientId) => ({ ingredients: { some: { ingredientId } } })),
     ],
   };
+
+  // Relevance order can't be expressed in SQL here (it lives in the ranked id
+  // list), so a search fetches its matches — capped by the search's own
+  // candidate limit — and pages them in memory.
+  if (ranked) {
+    const rankOf = new Map(ranked.map((row, index) => [row.id, index]));
+    const matches = await prisma.recipe.findMany({
+      where,
+      include: recipeDetailInclude,
+    });
+    matches.sort((a, b) => rankOf.get(a.id)! - rankOf.get(b.id)!);
+
+    return {
+      items: matches.slice((page - 1) * pageSize, page * pageSize),
+      total: matches.length,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(matches.length / pageSize)),
+    };
+  }
 
   const [items, total] = await Promise.all([
     prisma.recipe.findMany({

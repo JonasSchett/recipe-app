@@ -121,6 +121,17 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   dictionary-only entries are excluded there), and `AddTagForm` on `/tags`.
   If the vocabulary ever exceeds a few thousand entities, switch the callers to a
   debounced server search on `normalized` instead.
+- **Recipe search** is fuzzy and lives in `src/lib/suggest.ts`'s sibling
+  `src/lib/recipe-search.ts`. It runs as a *prefilter*: raw SQL returns recipe
+  ids ranked by relevance, which `getRecipes` applies as `id IN (…)` so
+  visibility rules, tag/ingredient filters and the typed includes stay put.
+  Matching folds both sides the same way the autocomplete does (both keys, so
+  "suss"/"suess"/"süß" agree), then adds trigram similarity for typos; a search
+  is ordered by relevance, no search stays alphabetical. Needs the **`pg_trgm`
+  and `unaccent`** extensions — created by the `fuzzy_recipe_search` migration,
+  which `migrate deploy` applies on the production DB too. `FUZZY_THRESHOLD`
+  there is set below Postgres' 0.6 default on purpose; see its comment before
+  changing it.
 - The filterable list lives in `RecipeBrowser` (server) + `RecipeFilters`
   (client, URL-driven: `?q=&tags=a,b&ingredients=c`), shared by `/` and
   `/recipes`. The dashboard `/` adds hearted-tag sections above it; those rows
