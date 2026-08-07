@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ImageOff, Lock } from "lucide-react";
+import { ImageOff, Lock, NotebookPen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { RecipeDetail } from "@/lib/queries";
 
@@ -40,6 +40,13 @@ export function RecipeCard({ recipe }: { recipe: RecipeDetail }) {
           <h3 className="truncate font-semibold leading-tight">{recipe.title}</h3>
           {recipe.visibility === "PRIVATE" && (
             <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          {/* `notes` is scoped to the viewer, so this marks *your* note. */}
+          {recipe.notes.length > 0 && (
+            <NotebookPen
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              aria-label="You have a note on this recipe"
+            />
           )}
         </div>
         {recipe.description && (

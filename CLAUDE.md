@@ -116,6 +116,12 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   it works over plain http on the LAN. Desktop ignores `capture` and shows a
   picker.
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
+- **Notes** (`RecipeNote`) are a private notepad, one per (user, recipe) — not a
+  comment thread. Anyone who can *view* a recipe may note it, so the guard in
+  `actions/notes.ts` is view permission, not ownership. `recipeDetailInclude`
+  takes the viewer's id and scopes the included note by it; that `where` is the
+  only thing keeping notes private, so always pass the **current** user, never
+  a recipe's author.
 - **Autocomplete** for ingredient/tag entry: `src/lib/suggest.ts` is the pure
   matcher (fold = lowercase + `ß`→`ss` + diacritics dropped, plus an `ue`-style
   expanded key, so "Kart"/"suss"/"suess" all hit). `getEntityVocabulary()` in
@@ -134,7 +140,9 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   visibility rules, tag/ingredient filters and the typed includes stay put.
   Matching folds both sides the same way the autocomplete does (both keys, so
   "suss"/"suess"/"süß" agree), then adds trigram similarity for typos; a search
-  is ordered by relevance, no search stays alphabetical. Needs the **`pg_trgm`
+  is ordered by relevance, no search stays alphabetical. It also covers the
+  **viewer's own notes** — that branch is scoped by `viewerId`, which is what
+  stops one person's private notes surfacing in another's results. Needs the **`pg_trgm`
   and `unaccent`** extensions — created by the `fuzzy_recipe_search` migration,
   which `migrate deploy` applies on the production DB too. `FUZZY_THRESHOLD`
   there is set below Postgres' 0.6 default on purpose; see its comment before

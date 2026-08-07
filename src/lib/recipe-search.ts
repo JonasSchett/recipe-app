@@ -48,6 +48,9 @@ const WEIGHT = {
   description: 0.9,
   // Tag/ingredient hits are curated vocabulary, so they mean more than prose.
   entity: 0.9,
+  // Something you wrote yourself is a strong signal — you are likely searching
+  // for the words you chose ("the one I said needed longer").
+  note: 0.85,
   instructions: 0.8,
 } as const;
 
@@ -89,13 +92,20 @@ function foldedExpanded(column: Prisma.Sql): Prisma.Sql {
 }
 
 /**
- * Recipe ids matching `term`, best first. Matches the recipe's own text and any
- * localized tag/ingredient alias, each both as a substring and fuzzily.
+ * Recipe ids matching `term`, best first. Matches the recipe's own text, any
+ * localized tag/ingredient alias, and `viewerId`'s own notes — each both as a
+ * substring and fuzzily.
+ *
+ * `viewerId` scopes the notes branch and must be the *current* user: it is what
+ * stops one person's private notes from surfacing another person's results.
  *
  * Ignores visibility — the caller is responsible for applying `visibilityWhere`
  * to the ids this returns.
  */
-export async function searchRecipeIds(term: string): Promise<RankedRecipeId[]> {
+export async function searchRecipeIds(
+  term: string,
+  viewerId: string,
+): Promise<RankedRecipeId[]> {
   // Fold the query once; every comparison below is folded-against-folded.
   const query = fold(term);
   if (!query) return [];
@@ -128,6 +138,7 @@ export async function searchRecipeIds(term: string): Promise<RankedRecipeId[]> {
   const description = Prisma.raw('r."description"');
   const instructions = Prisma.raw('r."instructions"');
   const alias = Prisma.raw('n."normalized"');
+  const noteBody = Prisma.raw('rn."body"');
 
   // Every candidate is scored and the non-matches (score 0) are dropped by the
   // HAVING, rather than repeating the match test as a WHERE. That means a scan
@@ -156,6 +167,14 @@ export async function searchRecipeIds(term: string): Promise<RankedRecipeId[]> {
       SELECT rt."recipeId" AS id, ${score(alias, WEIGHT.entity)} AS score
       FROM "RecipeTag" rt
       JOIN "TagName" n ON n."tagId" = rt."tagId"
+
+      UNION ALL
+
+      -- The viewer's OWN notes only. Without this predicate a search would leak
+      -- the existence of other people's private notes through the results.
+      SELECT rn."recipeId" AS id, ${score(noteBody, WEIGHT.note)} AS score
+      FROM "RecipeNote" rn
+      WHERE rn."userId" = ${viewerId}
     )
     SELECT id, MAX(score)::double precision AS score
     FROM scored

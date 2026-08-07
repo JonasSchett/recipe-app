@@ -50,9 +50,9 @@ export type RecipeDetail = Prisma.RecipeGetPayload<{
  * search text and by tags/ingredients (AND across every selection).
  *
  * Search is fuzzy (see `lib/recipe-search.ts`): it matches the title,
- * description and instructions plus any localized tag/ingredient alias, and
- * tolerates typos and missing umlauts. A search is ordered by relevance;
- * without one the list stays alphabetical.
+ * description and instructions, any localized tag/ingredient alias, and the
+ * current user's own notes, tolerating typos and missing umlauts. A search is
+ * ordered by relevance; without one the list stays alphabetical.
  */
 export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
   const user = await requireUser();
@@ -62,7 +62,7 @@ export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
   // The fuzzy pass runs first and yields ranked ids, which then act as one more
   // filter here — so visibility and the tag/ingredient selections still decide
   // what is actually returned.
-  const ranked = search ? await searchRecipeIds(search) : null;
+  const ranked = search ? await searchRecipeIds(search, user.id) : null;
 
   const where: Prisma.RecipeWhereInput = {
     AND: [
