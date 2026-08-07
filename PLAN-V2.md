@@ -440,14 +440,30 @@ I recommend the native attribute unless you specifically want the in-app preview
 Cheap and self-contained first, so each commit is easy to review and the big one
 lands last on a settled foundation:
 
-| # | Feature | Migration | Notes |
-|---|---------|-----------|-------|
-| 1 | F2 — search over instructions | ✅ | ✅ done — fuzzy, see above |
-| 2 | F6 — camera capture | — | self-contained |
-| 3 | F4 — settings + default visibility | ✅ | builds the settings surface |
-| 4 | F3 — notes | ✅ | extends search from step 1 |
-| 5 | F1 — batch select + batch tag/ingredient | — | builds selection |
-| 6 | F5 — pinned lists | ✅ | reuses selection, extends `visibilityWhere` |
+**All six are implemented.**
+
+| # | Feature | Migration | Commits |
+|---|---------|-----------|---------|
+| 1 | F2 — search over instructions (fuzzy) | ✅ | `01241ec` |
+| 2 | F6 — camera capture | — | `645aec6` |
+| 3 | F4 — settings + default visibility | ✅ | `ad84c57` |
+| 4 | F3 — notes | ✅ | `a9fd888`, `5be9a07` |
+| 5 | F1 — batch select + tags/ingredients | — | `e462253`, `91e4ae6`, `509df55` |
+| 6 | F5 — pinned lists | ✅ | `3aaeeac`, `56abc6c`, `1309026`, `5435aec`, `efd3bec` |
+
+Four migrations in total; all apply automatically via `prisma migrate deploy`
+on the next `docker compose up -d`. The F2 migration also creates the `pg_trgm`
+and `unaccent` extensions.
+
+### Deferred, in rough order of usefulness
+
+- Batch **remove** tag, and batch set-visibility (cheap: `deleteMany` /
+  `updateMany` over the same selection).
+- Per-day assignment on list items (`plannedFor`) for true weekly planning, and
+  a shopping list generated from a list's ingredients. The schema leaves room.
+- "Select all N matching the filter" across pages — needs the filter sent to
+  the batch action instead of ids.
+- HEIC uploads (needs `sharp`; see PLAN.md §8.1).
 
 Each step: `npm run build` (the typecheck gate) + `npm run lint`, and end-to-end
 verification via the `verify` skill before committing.
