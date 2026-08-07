@@ -83,13 +83,17 @@ export const listInviteEmailSchema = z
 // --- Batch operations (declared last: they build on the schemas above) -------
 
 /**
- * Recipes targeted by a batch operation. Capped well below what the UI can
- * select so a hand-made payload can't ask for unbounded work.
+ * Most recipes one batch may touch. Bounds the work a single request can ask
+ * for, and is also the ceiling "select all matching" fills to, so the UI can
+ * never build a selection the actions would reject.
  */
+export const BATCH_RECIPE_LIMIT = 200;
+
+/** Recipes targeted by a batch operation. */
 export const batchRecipeIdsSchema = z
   .array(z.string().min(1))
   .min(1, "Select at least one recipe")
-  .max(200);
+  .max(BATCH_RECIPE_LIMIT);
 
 /** Payload for adding tags to many recipes at once. */
 export const batchTagsSchema = z.object({

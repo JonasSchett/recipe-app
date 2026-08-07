@@ -10,6 +10,23 @@ import {
   type BatchTagsInput,
 } from "@/lib/validations";
 import { resolveIngredients, resolveTags } from "@/lib/actions/_shared";
+import { getFilteredRecipeIds } from "@/lib/queries";
+
+/**
+ * Ids of every recipe matching the current filter, for "select all matching".
+ *
+ * A read, but it lives in an action module because a Client Component cannot
+ * import `queries.ts` (it pulls in Prisma) — a Server Action is the only way
+ * to reach it from the selection bar. `getFilteredRecipeIds` applies the
+ * caller's own visibility rules and the batch cap.
+ */
+export async function getSelectableRecipeIds(filter: {
+  search?: string;
+  tagIds?: string[];
+  ingredientIds?: string[];
+}) {
+  return getFilteredRecipeIds(filter);
+}
 
 export type BatchResult = {
   /** Recipes actually written to. */

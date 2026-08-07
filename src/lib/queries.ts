@@ -6,7 +6,11 @@ import {
   requireUser,
   type SessionUser,
 } from "@/lib/auth-guards";
-import { recipeFilterSchema, type RecipeFilter } from "@/lib/validations";
+import {
+  BATCH_RECIPE_LIMIT,
+  recipeFilterSchema,
+  type RecipeFilter,
+} from "@/lib/validations";
 import {
   INGREDIENT_TRANSLATIONS,
   TAG_TRANSLATIONS,
@@ -74,6 +78,44 @@ export type RecipeDetail = Prisma.RecipeGetPayload<{
 }>;
 
 /**
+ * Turn a filter into the Prisma `where` the recipe list uses, plus the
+ * relevance ranking when there's a search term.
+ *
+ * Shared by `getRecipes` and `getFilteredRecipeIds` on purpose: "select all
+ * matching" has to resolve to exactly the set the user is looking at, and two
+ * copies of this would eventually disagree.
+ */
+async function recipeMatchWhere(
+  user: SessionUser,
+  filter: { search?: string; tagIds: string[]; ingredientIds: string[] },
+) {
+  // The fuzzy pass runs first and yields ranked ids, which then act as one more
+  // filter — so visibility and the tag/ingredient selections still decide what
+  // is actually returned.
+  const ranked = filter.search
+    ? await searchRecipeIds(filter.search, user.id)
+    : null;
+
+  const where: Prisma.RecipeWhereInput = {
+    AND: [
+      visibilityWhere(user),
+      ...(ranked ? [{ id: { in: ranked.map((row) => row.id) } }] : []),
+      ...filter.tagIds.map((tagId) => ({ tags: { some: { tagId } } })),
+      ...filter.ingredientIds.map((ingredientId) => ({
+        ingredients: { some: { ingredientId } },
+      })),
+    ],
+  };
+
+  return {
+    where,
+    rankOf: ranked
+      ? new Map(ranked.map((row, index) => [row.id, index]))
+      : null,
+  };
+}
+
+/**
  * Paginated list of recipes the current user may view, optionally narrowed by
  * search text and by tags/ingredients (AND across every selection).
  *
@@ -87,30 +129,21 @@ export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
   const { search, tagIds, ingredientIds, page, pageSize } =
     recipeFilterSchema.parse(filter);
 
-  // The fuzzy pass runs first and yields ranked ids, which then act as one more
-  // filter here — so visibility and the tag/ingredient selections still decide
-  // what is actually returned.
-  const ranked = search ? await searchRecipeIds(search, user.id) : null;
-
-  const where: Prisma.RecipeWhereInput = {
-    AND: [
-      visibilityWhere(user),
-      ...(ranked ? [{ id: { in: ranked.map((row) => row.id) } }] : []),
-      ...tagIds.map((tagId) => ({ tags: { some: { tagId } } })),
-      ...ingredientIds.map((ingredientId) => ({ ingredients: { some: { ingredientId } } })),
-    ],
-  };
+  const { where, rankOf: ranked } = await recipeMatchWhere(user, {
+    search,
+    tagIds,
+    ingredientIds,
+  });
 
   // Relevance order can't be expressed in SQL here (it lives in the ranked id
   // list), so a search fetches its matches — capped by the search's own
   // candidate limit — and pages them in memory.
   if (ranked) {
-    const rankOf = new Map(ranked.map((row, index) => [row.id, index]));
     const matches = await prisma.recipe.findMany({
       where,
       include: recipeDetailInclude(user.id),
     });
-    matches.sort((a, b) => rankOf.get(a.id)! - rankOf.get(b.id)!);
+    matches.sort((a, b) => ranked.get(a.id)! - ranked.get(b.id)!);
 
     return {
       items: matches.slice((page - 1) * pageSize, page * pageSize),
@@ -138,6 +171,43 @@ export async function getRecipes(filter: Partial<RecipeFilter> = {}) {
     page,
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+/**
+ * Every recipe id matching a filter, for "select all matching" — the whole
+ * result set, not just the page on screen.
+ *
+ * Capped at `BATCH_RECIPE_LIMIT`, the same ceiling the batch actions enforce,
+ * so a selection can never be built that they would then reject. `total` is
+ * the untruncated count, so the caller can say how many were left out. When
+ * searching, the cap keeps the *most relevant* matches rather than an
+ * arbitrary slice.
+ */
+export async function getFilteredRecipeIds(filter: Partial<RecipeFilter> = {}) {
+  const user = await requireUser();
+  const { search, tagIds, ingredientIds } = recipeFilterSchema.parse(filter);
+
+  const { where, rankOf } = await recipeMatchWhere(user, {
+    search,
+    tagIds,
+    ingredientIds,
+  });
+
+  const rows = await prisma.recipe.findMany({
+    where,
+    select: { id: true },
+    // Ordering only matters for which ones survive the cap.
+    ...(rankOf ? {} : { orderBy: { title: "asc" as const } }),
+  });
+
+  const ordered = rankOf
+    ? [...rows].sort((a, b) => rankOf.get(a.id)! - rankOf.get(b.id)!)
+    : rows;
+
+  return {
+    ids: ordered.slice(0, BATCH_RECIPE_LIMIT).map((row) => row.id),
+    total: ordered.length,
   };
 }
 

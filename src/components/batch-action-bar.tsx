@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
 import { useSelection } from "@/components/recipe-selection";
-import { addIngredientsToRecipes, addTagsToRecipes } from "@/lib/actions/batch";
+import {
+  addIngredientsToRecipes,
+  addTagsToRecipes,
+  getSelectableRecipeIds,
+} from "@/lib/actions/batch";
 import { addRecipesToList } from "@/lib/actions/lists";
 import type { PinnableList } from "@/components/pin-to-list";
 import type { EntitySuggestion } from "@/lib/suggest";
@@ -47,11 +51,17 @@ export function BatchActionBar({
   tagVocabulary = [],
   ingredientVocabulary = [],
   pinnableLists = [],
+  filter,
+  totalMatching,
 }: {
   pageRecipeIds: string[];
   tagVocabulary?: EntitySuggestion[];
   ingredientVocabulary?: EntitySuggestion[];
   pinnableLists?: PinnableList[];
+  /** The filter currently applied to the list, for "select all matching". */
+  filter: { search: string; tagIds: string[]; ingredientIds: string[] };
+  /** How many recipes match it in total, across every page. */
+  totalMatching: number;
 }) {
   const router = useRouter();
   const { active, selected, selectMany, clear, setActive } = useSelection();
@@ -161,6 +171,30 @@ export function BatchActionBar({
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not pin them.");
+      }
+    });
+  }
+
+  /**
+   * Select everything matching the filter, not just this page. The ids are
+   * resolved on the server from the same filter the list used, so the
+   * selection is exactly what's being looked at — and it's capped at what one
+   * batch can take, which the message spells out when it bites.
+   */
+  function selectAllMatching() {
+    setError(null);
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const { ids, total } = await getSelectableRecipeIds(filter);
+        selectMany(ids);
+        if (ids.length < total) {
+          setMessage(
+            `Selected ${ids.length} of ${total} — the most one batch can take. Apply, then select the rest.`,
+          );
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not select them all.");
       }
     });
   }
@@ -420,6 +454,18 @@ export function BatchActionBar({
             >
               Select page
             </Button>
+            {/* Only worth offering when there is more than this page to get. */}
+            {totalMatching > pageRecipeIds.length && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={selectAllMatching}
+                disabled={pending}
+              >
+                {pending ? "Selecting…" : `Select all ${totalMatching}`}
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"

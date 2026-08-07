@@ -137,6 +137,8 @@ export async function RecipeBrowser({
           tagVocabulary={vocabulary.tags}
           ingredientVocabulary={vocabulary.ingredients}
           pinnableLists={pinnableLists}
+          filter={{ search, tagIds, ingredientIds }}
+          totalMatching={total}
         />
       </div>
     </RecipeSelectionProvider>
