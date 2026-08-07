@@ -461,8 +461,9 @@ and `unaccent` extensions.
   `updateMany` over the same selection).
 - Per-day assignment on list items (`plannedFor`) for true weekly planning, and
   a shopping list generated from a list's ingredients. The schema leaves room.
-- "Select all N matching the filter" across pages — needs the filter sent to
-  the batch action instead of ids.
+- ~~"Select all N matching the filter" across pages~~ — done (`d9dda25`).
+  Resolved server-side to ids rather than passing the filter to the batch
+  actions, so the selection stays a concrete set you can still deselect from.
 - HEIC uploads (needs `sharp`; see PLAN.md §8.1).
 
 Each step: `npm run build` (the typecheck gate) + `npm run lint`, and end-to-end
