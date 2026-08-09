@@ -36,10 +36,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return !!user.email && allowed.includes(user.email.toLowerCase());
     },
     // Expose the user id and role on the session for authorization checks.
+    // Free with database sessions: the full user row is already loaded here.
     session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
         session.user.role = user.role;
+        session.user.mustChangePassword = user.mustChangePassword;
       }
       return session;
     },

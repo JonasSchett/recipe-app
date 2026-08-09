@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { RecipeCard } from "@/components/recipe-card";
 import { ListHeaderActions } from "@/components/list-header-actions";
 import { ListItemActions } from "@/components/list-item-actions";
 import { ListSharePanel } from "@/components/list-share-panel";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 import { getListById } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -16,8 +16,7 @@ export default async function ListPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const { id } = await params;
   const result = await getListById(id);

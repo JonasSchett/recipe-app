@@ -1,10 +1,9 @@
 "use server";
 
-import { randomUUID } from "crypto";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { consumePendingListInvites } from "@/lib/list-invites";
+import { startSession } from "@/lib/session-cookie";
 
 /**
  * DEVELOPMENT-ONLY sign-in. Google OAuth requires external setup, so this lets
@@ -31,20 +30,9 @@ export async function devSignIn(formData: FormData) {
   // like production.
   await consumePendingListInvites(user.id, user.email);
 
-  const sessionToken = randomUUID();
-  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  await prisma.session.create({
-    data: { sessionToken, userId: user.id, expires },
-  });
-
-  // Non-secure cookie name (we're on http://localhost in dev).
-  const store = await cookies();
-  store.set("authjs.session-token", sessionToken, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    expires,
-  });
+  // Same helper the password sign-in uses, so both paths agree on the cookie
+  // name — which differs between http and https.
+  await startSession(user.id);
 
   redirect("/recipes");
 }

@@ -227,47 +227,64 @@ export async function joinListByToken(token: string) {
 }
 
 /**
- * Share a list with an email address. Owner only.
+ * Share a list with someone by email address or username. Owner only.
  *
- * If that address already has an account they become a member immediately and
- * the list simply appears under "Shared with me" next time they load the app.
- * If it doesn't, the share is held as a `RecipeListInvite` and consumed the
- * first time they sign in (see `consumePendingListInvites`, wired into the
- * NextAuth `signIn` event) — so you can share with someone before they have
- * ever used the app.
+ * An email that already has an account, or any known username, becomes a
+ * member immediately and the list shows up under "Shared with me". An email
+ * with *no* account yet is held as a `RecipeListInvite` and consumed the first
+ * time they sign in (see `consumePendingListInvites`, wired into the NextAuth
+ * `signIn` event) — so you can share with someone before they have used the app.
+ *
+ * An unknown **username** is an error rather than a pending invite: invites are
+ * keyed by email and settled during sign-in, and password accounts are created
+ * by an admin, so there is nothing for a username invite to attach to and it
+ * would sit unconsumed forever.
  */
 export async function shareListWithEmail(
   listId: string,
-  email: string,
+  identifier: string,
   role: "VIEWER" | "EDITOR" = "EDITOR",
 ) {
   const user = await requireUser();
-  const parsedEmail = listInviteEmailSchema.parse(email);
   const parsedRole = listRoleSchema.parse(role);
   await requireListPermission(user, listId, "OWNER");
 
-  // Google decides the casing of a stored address, so match case-insensitively
-  // rather than trusting it to equal the lowercased input.
-  const existing = await prisma.user.findFirst({
-    where: { email: { equals: parsedEmail, mode: "insensitive" } },
-    select: { id: true },
-  });
+  const raw = identifier.trim().toLowerCase();
+  if (!raw) throw new Error("Enter an email address or username.");
+  const looksLikeEmail = raw.includes("@");
 
-  if (existing) {
-    if (existing.id === user.id) {
+  const target = looksLikeEmail
+    ? // Google decides the casing of a stored address, so match
+      // case-insensitively rather than trusting it to equal the input.
+      await prisma.user.findFirst({
+        where: { email: { equals: raw, mode: "insensitive" } },
+        select: { id: true },
+      })
+    : await prisma.user.findUnique({
+        where: { username: raw },
+        select: { id: true },
+      });
+
+  if (target) {
+    if (target.id === user.id) {
       throw new Error("You already own this list.");
     }
     await prisma.recipeListMember.upsert({
-      where: { listId_userId: { listId, userId: existing.id } },
-      create: { listId, userId: existing.id, role: parsedRole },
+      where: { listId_userId: { listId, userId: target.id } },
+      create: { listId, userId: target.id, role: parsedRole },
       // Re-sharing with an existing member updates their role, which is what
       // the owner just asked for by picking one.
       update: { role: parsedRole },
     });
     revalidateList(listId);
-    return { status: "added" as const, email: parsedEmail };
+    return { status: "added" as const, email: raw };
   }
 
+  if (!looksLikeEmail) {
+    throw new Error(`No account with the username "${raw}".`);
+  }
+
+  const parsedEmail = listInviteEmailSchema.parse(raw);
   await prisma.recipeListInvite.upsert({
     where: { listId_email: { listId, email: parsedEmail } },
     create: { listId, email: parsedEmail, role: parsedRole, invitedById: user.id },

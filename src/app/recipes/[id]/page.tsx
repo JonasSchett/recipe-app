@@ -1,11 +1,11 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { KeepScreenAwake } from "@/components/keep-screen-awake";
 import { RecipeActions } from "@/components/recipe-actions";
 import { RecipeGallery } from "@/components/recipe-gallery";
 import { RecipeNote } from "@/components/recipe-note";
 import { PinToList } from "@/components/pin-to-list";
-import { getCurrentUser, isAdmin } from "@/lib/auth-guards";
+import { isAdmin, requirePageUser } from "@/lib/auth-guards";
 import { getListsForPinning, getRecipeById } from "@/lib/queries";
 
 export default async function RecipePage({
@@ -13,8 +13,7 @@ export default async function RecipePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const { id } = await params;
   const recipe = await getRecipeById(id);

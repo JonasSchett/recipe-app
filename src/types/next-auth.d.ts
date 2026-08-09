@@ -6,16 +6,19 @@ declare module "next-auth" {
     user: {
       id: string;
       role: Role;
+      mustChangePassword: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     role: Role;
+    mustChangePassword: boolean;
   }
 }
 
 declare module "@auth/core/adapters" {
   interface AdapterUser {
     role: Role;
+    mustChangePassword: boolean;
   }
 }

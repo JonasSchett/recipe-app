@@ -39,11 +39,13 @@ and the Docker stack; for the container, `docker-compose.yml` overrides
 | Variable | Required | Used by | Notes |
 | --- | --- | --- | --- |
 | `AUTH_SECRET` | yes | both | Session/JWT signing. `openssl rand -base64 32`. |
+| `AUTH_METHODS` | optional | both | Sign-in methods offered, comma-separated: `google`, `password`. Unset = `google`. |
+| `AUTH_PASSWORD_IDENTIFIER` | optional | both | What a password account logs in with: `username` (default) or `email`. |
 | `AUTH_URL` | yes | both | Public base URL. Dev: `http://localhost:3000`. Prod: `https://recipes.example.com`. |
 | `NEXTAUTH_URL` | yes | both | Same value as `AUTH_URL` (legacy alias). |
 | `GOOGLE_CLIENT_ID` | prod | both | Google OAuth client ID. |
 | `GOOGLE_CLIENT_SECRET` | prod | both | Google OAuth client secret. |
-| `AUTH_ALLOWED_EMAILS` | optional | both | Comma-separated allowlist of emails that may sign in. Empty = anyone who passes Google. |
+| `AUTH_ALLOWED_EMAILS` | optional | both | Comma-separated allowlist of emails that may sign in. Empty = anyone who passes Google. Google only — password accounts are created by an admin. |
 | `DATABASE_URL` | dev only | `npm run dev` | Local Postgres URL. Ignored in the container (compose sets it). |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | prod | compose | DB credentials; compose builds the container `DATABASE_URL` from these. Keep the password alphanumeric (no `@ : / ? # %`). |
 | `GHCR_OWNER` | prod | compose | GitHub owner for the image path, **lowercase** (e.g. `your-github-username`). |
@@ -52,6 +54,29 @@ and the Docker stack; for the container, `docker-compose.yml` overrides
 
 > Locally you don't need Google credentials — the `/login` page has a dev-only
 > sign-in (disabled when `NODE_ENV=production`).
+
+### Choosing how people sign in
+
+`AUTH_METHODS` decides what `/login` offers. Three common setups:
+
+| Goal | Settings |
+| --- | --- |
+| Google only (default) | `AUTH_METHODS=google` + `GOOGLE_CLIENT_*` |
+| Username + password, no email anywhere | `AUTH_METHODS=password`, `AUTH_PASSWORD_IDENTIFIER=username` |
+| Email + password | `AUTH_METHODS=password`, `AUTH_PASSWORD_IDENTIFIER=email` |
+
+Both can be on at once (`AUTH_METHODS=google,password`).
+
+**Password accounts have no self-registration.** An admin creates each one from
+**Account → Manage users** and hands over a starting password, which the person
+must replace on first sign-in. On a brand-new instance with no accounts at all,
+`/login` instead offers a one-time setup form that creates the first admin —
+that's how a password-only install gets its first way in, since
+`AUTH_ADMIN_EMAILS` only applies to Google sign-in.
+
+Passwords are stored as salted scrypt digests (Node's built-in `crypto`, no
+extra dependency). Changing or resetting a password signs that account out
+everywhere else.
 
 ## Local development
 

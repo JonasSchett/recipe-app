@@ -57,6 +57,46 @@ export type UserSettingsInput = z.infer<typeof userSettingsSchema>;
 
 export const tagNameSchema = z.string().trim().min(1, "Tag name is required").max(50);
 
+// --- Password sign-in -------------------------------------------------------
+
+/**
+ * A login name. Lowercased on the way in so "Anna" and "anna" are one account —
+ * the column is unique, and two accounts differing only in case would be a
+ * standing invitation to impersonate someone.
+ */
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, "Username must be at least 3 characters")
+  .max(32)
+  .regex(
+    /^[a-z0-9._-]+$/,
+    "Use only letters, numbers, and . _ -",
+  );
+
+/**
+ * What the sign-in form accepts. Deliberately loose — it is matched against the
+ * database, not validated for shape, so a wrong guess fails as bad credentials
+ * rather than as a format complaint that confirms what the right shape is.
+ */
+export const signInIdentifierSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(200);
+
+/**
+ * Minimum 10 characters and nothing else. Length beats composition rules for
+ * real-world strength, and this is a self-hosted app for a household, not a
+ * bank.
+ */
+export const newPasswordSchema = z
+  .string()
+  .min(10, "Password must be at least 10 characters")
+  .max(200, "Password must be at most 200 characters");
+
 // --- Shared recipe lists ----------------------------------------------------
 
 export const listRoleSchema = z.enum(["VIEWER", "EDITOR"]);

@@ -160,7 +160,7 @@ export function ListSharePanel({
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <Mail className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Share by email</span>
+          <span className="text-sm font-medium">Share with a person</span>
         </div>
         <form
           className="flex gap-2"
@@ -183,11 +183,13 @@ export function ListSharePanel({
           }}
         >
           <Input
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@example.com"
-            aria-label="Email to share with"
+            placeholder="name@example.com or username"
+            aria-label="Email or username to share with"
+            autoCapitalize="none"
+            spellCheck={false}
           />
           <Button type="submit" variant="outline" disabled={pending || !email.trim()}>
             Share

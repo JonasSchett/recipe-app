@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ImageOff, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { CreateListForm } from "@/components/create-list-form";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 import { getMyLists } from "@/lib/queries";
 
 export default async function ListsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const lists = await getMyLists();
   const mine = lists.filter((list) => list.isOwner);

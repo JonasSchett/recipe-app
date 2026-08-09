@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { RecipeForm } from "@/components/recipe-form";
-import { getCurrentUser, isAdmin } from "@/lib/auth-guards";
+import { isAdmin, requirePageUser } from "@/lib/auth-guards";
 import { getEntityVocabulary, getRecipeById } from "@/lib/queries";
 
 export default async function EditRecipePage({
@@ -8,8 +8,7 @@ export default async function EditRecipePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const { id } = await params;
   const recipe = await getRecipeById(id);

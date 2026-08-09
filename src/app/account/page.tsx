@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -10,14 +9,13 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UserSettingsForm } from "@/components/user-settings-form";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 import { getUserSettings } from "@/lib/queries";
 import { signOutAction } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 
 export default async function AccountPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const settings = await getUserSettings();
 
@@ -27,7 +25,11 @@ export default async function AccountPage() {
       <Card>
         <CardHeader>
           <CardTitle>{user.name ?? "Signed in"}</CardTitle>
-          <CardDescription>{user.email}</CardDescription>
+          {/* A password account may have no email, and a Google account has no
+              username — show whichever identifies this one. */}
+          <CardDescription>
+            {user.email ?? settings.username ?? "Signed in"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center gap-2 text-sm">
@@ -36,6 +38,14 @@ export default async function AccountPage() {
               {user.role}
             </Badge>
           </div>
+          {settings.hasPassword && (
+            <Link
+              href="/change-password"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Change password
+            </Link>
+          )}
           {user.role === "ADMIN" && (
             <Link
               href="/admin/users"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipe-card";
@@ -7,7 +8,7 @@ import {
   recipeBrowserProps,
   type RecipeBrowserParams,
 } from "@/components/recipe-browser";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { CHANGE_PASSWORD_PATH, getCurrentUser } from "@/lib/auth-guards";
 import { getHeartedTagSections, getMyLists } from "@/lib/queries";
 
 export default async function Home({
@@ -16,6 +17,7 @@ export default async function Home({
   searchParams: Promise<RecipeBrowserParams>;
 }) {
   const user = await getCurrentUser();
+  if (user?.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
 
   // Logged-out visitors get a simple landing page.
   if (!user) {

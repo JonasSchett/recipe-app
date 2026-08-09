@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ImageOff } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 import { getHeartedTagCards } from "@/lib/queries";
 
 /**
@@ -10,8 +9,7 @@ import { getHeartedTagCards } from "@/lib/queries";
  * recipe list pre-filtered by that tag.
  */
 export default async function FavouriteTagsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const cards = await getHeartedTagCards();
 

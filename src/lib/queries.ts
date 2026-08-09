@@ -15,6 +15,7 @@ import {
   INGREDIENT_TRANSLATIONS,
   TAG_TRANSLATIONS,
 } from "@/lib/i18n/dictionary";
+import { isAuthMethodEnabled } from "@/lib/auth-methods";
 import { withDictionary, type EntitySuggestion } from "@/lib/suggest";
 import { searchRecipeIds } from "@/lib/recipe-search";
 import { getListPermission, listAccessWhere } from "@/lib/list-access";
@@ -411,30 +412,53 @@ export async function getListsForPinning() {
 /**
  * The current user's settings (see /account). Read fresh from the row rather
  * than the session so a change takes effect on the very next render.
+ *
+ * `hasPassword` distinguishes a password account from a Google one, which is
+ * what decides whether /account offers a "change password" link. As in
+ * `getAllUsers`, the digest itself never leaves this function.
  */
 export async function getUserSettings() {
   const user = await requireUser();
-  return prisma.user.findUniqueOrThrow({
+  const { passwordHash, ...settings } = await prisma.user.findUniqueOrThrow({
     where: { id: user.id },
-    select: { defaultRecipeVisibility: true },
+    select: {
+      defaultRecipeVisibility: true,
+      username: true,
+      passwordHash: true,
+    },
   });
+  return { ...settings, hasPassword: passwordHash !== null };
 }
 
-/** All users with their role and recipe count, for the admin console. */
+/**
+ * All users with their role and recipe count, for the admin console.
+ *
+ * `passwordHash` is read only to derive `hasPassword` and is never returned —
+ * the digest has no business leaving the server, and the page only needs to
+ * know whether a reset button applies.
+ */
 export async function getAllUsers() {
   await requireAdmin();
-  return prisma.user.findMany({
-    orderBy: [{ role: "asc" }, { email: "asc" }],
+  const users = await prisma.user.findMany({
+    orderBy: [{ role: "asc" }, { email: "asc" }, { username: "asc" }],
     select: {
       id: true,
       name: true,
       email: true,
+      username: true,
       image: true,
       role: true,
       createdAt: true,
+      passwordHash: true,
+      mustChangePassword: true,
       _count: { select: { recipes: true } },
     },
   });
+
+  return users.map(({ passwordHash, ...user }) => ({
+    ...user,
+    hasPassword: passwordHash !== null,
+  }));
 }
 
 /**
@@ -492,6 +516,19 @@ export async function getEntityVocabulary(): Promise<{
       "tag",
     ),
   };
+}
+
+/**
+ * Whether the app has no accounts at all, so the login page should offer
+ * first-run setup instead of a sign-in form.
+ *
+ * Deliberately unauthenticated — there is nobody to authenticate yet. It leaks
+ * only "this instance is empty", and it stops being true forever after the
+ * first account exists, which is also what closes the setup action.
+ */
+export async function isFirstRunSetupNeeded(): Promise<boolean> {
+  if (!isAuthMethodEnabled("password")) return false;
+  return (await prisma.user.count()) === 0;
 }
 
 /** All ingredients with recipe counts (alphabetical). */

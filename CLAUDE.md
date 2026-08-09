@@ -60,7 +60,12 @@ that hasn't left this machine.
   `signOut`. Session carries `user.id` and `user.role` (see
   `src/types/next-auth.d.ts`).
 - `src/lib/prisma.ts` — singleton Prisma client; import `prisma` from here.
-- `src/lib/auth-guards.ts` — `getCurrentUser` / `requireUser` / `requireAdmin`.
+- `src/lib/auth-guards.ts` — `getCurrentUser` / `requireUser` / `requireAdmin` /
+  `requirePageUser`. Pages use `requirePageUser` (redirects to `/login`, or to
+  `/change-password` when one is pending); queries and actions use
+  `requireUser`, which **throws** while a password change is pending. That
+  throw is the real enforcement — a page redirect only hides the UI, and every
+  Server Action is reachable over HTTP without it.
 - `src/lib/validations.ts` — Zod schemas; input DTO types are inferred here.
 - `src/lib/queries.ts` — **read** helpers for Server Components. Plain async
   functions (no `"use server"`); they apply visibility rules.
@@ -91,6 +96,34 @@ that hasn't left this machine.
   `resolveIngredients` in `actions/_shared.ts`. Both run one shared algorithm
   over a per-domain `EntityStore`, so a fix reaches tags and ingredients at
   once — that unification is the point, don't fork it back apart.
+
+### Sign-in methods
+
+- The operator picks them: `AUTH_METHODS` (`google`, `password`, or both) and
+  `AUTH_PASSWORD_IDENTIFIER` (`username` | `email`). Read them through
+  `src/lib/auth-methods.ts`, never `process.env` directly, so the login page
+  and the actions can't disagree. Hiding a form is cosmetic; each action calls
+  `assertPasswordAuthEnabled` itself.
+- Password sign-in does **not** use Auth.js's Credentials provider, which
+  supports the JWT session strategy only ("Signing in with credentials only
+  supported if JWT strategy is enabled"). This app uses **database** sessions
+  and depends on them — the session callback gets the live user row, which is
+  why settings and `role` take effect immediately. So `signInWithPassword`
+  issues a session directly via `src/lib/session-cookie.ts`, the same way the
+  dev sign-in always has. Don't "fix" this by switching to JWT.
+- `sessionCookieName()` mirrors Auth.js's rule: `__Secure-` prefix over https,
+  bare name otherwise. Get it wrong and the cookie is set but every request
+  still reads as signed out.
+- Passwords are salted scrypt via `src/lib/password.ts` (Node built-in, no
+  dependency). The stored string names its algorithm, so it can be migrated.
+- **No self-registration.** Admins create accounts (`createUserAccount`) with a
+  starting password and `mustChangePassword: true`; the person replaces it on
+  first sign-in. An empty instance offers one-time first-admin setup on
+  `/login` — `AUTH_ADMIN_EMAILS` fires on the NextAuth sign-in event, which a
+  password-only deployment never reaches, so without it there'd be no way in.
+- `email` and `username` are both nullable and both unique: a Google account
+  has no username, a username account has no email. Anything rendering an
+  identifier must handle either being null.
 
 ## Gotchas
 

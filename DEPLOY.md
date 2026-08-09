@@ -22,7 +22,8 @@ to any Docker host + HTTPS reverse proxy.
   https. We use Nginx Proxy Manager with the `*.example.com` wildcard cert.
 - A hostname pointing at the host (e.g. `recipes.example.com`). LAN-only is fine —
   Google never connects to the app, it only redirects your browser.
-- A Google OAuth client (step 1).
+- A Google OAuth client (step 1) — **only if** you want Google sign-in. Set
+  `AUTH_METHODS=password` instead and you can skip step 1 entirely.
 
 ## 1. Google OAuth client
 
@@ -92,8 +93,15 @@ through the https hostname — hitting `http://<nas-ip>:3100` directly fails OAu
 
 ## 5. First sign-in → make yourself admin
 
-The first Google sign-in creates your `User` row as a normal `USER`. Promote
-yourself once so you can manage all recipes/tags:
+**With password sign-in** (`AUTH_METHODS` includes `password`), an instance
+with no accounts shows a one-time setup form at `/login`. Fill it in and you
+get the first admin account — nothing else to do. The form disappears as soon
+as an account exists, and the server refuses the request too, so it can't be
+used twice.
+
+**With Google sign-in**, the simplest route is `AUTH_ADMIN_EMAILS=you@gmail.com`
+in `.env` — that promotes you to ADMIN the first time you sign in. Failing
+that, promote yourself directly:
 
 ```bash
 docker compose exec db psql -U recipe -d recipe \
@@ -102,6 +110,9 @@ docker compose exec db psql -U recipe -d recipe \
 
 (In the Compose Manager, run this from the NAS console in the stack's project
 folder, or use the `db` container's console.)
+
+From there, **Account → Manage users** promotes others and — when password
+sign-in is on — creates accounts.
 
 ## Updating after code changes
 

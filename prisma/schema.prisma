@@ -48,6 +48,23 @@ model User {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
+  // --- Password sign-in (see lib/auth-methods.ts) ---------------------------
+  // Optional because a Google account has neither: `email` identifies those,
+  // `username` identifies password accounts, and either may be null. Both stay
+  // unique so one identifier never resolves to two people.
+
+  /// Login name for password accounts. Stored lowercased; the UI accepts any
+  /// casing and folds it before lookup.
+  username           String?  @unique
+  /// scrypt digest written by lib/password.ts — never a plaintext password.
+  /// Null for Google accounts, which have no password to check.
+  passwordHash       String?
+  /// Set when an admin creates the account or resets its password, cleared once
+  /// the user picks their own. While true every guarded page and action refuses
+  /// and sends them to /change-password, so an admin never keeps knowing the
+  /// password someone is actually using.
+  mustChangePassword Boolean  @default(false)
+
   // --- Per-user settings (see /account) -------------------------------------
   // Kept as columns rather than a separate settings table: database sessions
   // already hand the session callback the full user row, so a new column costs

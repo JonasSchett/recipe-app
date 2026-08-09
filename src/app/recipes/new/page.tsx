@@ -1,11 +1,9 @@
-import { redirect } from "next/navigation";
 import { RecipeForm } from "@/components/recipe-form";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 import { getEntityVocabulary, getUserSettings } from "@/lib/queries";
 
 export default async function NewRecipePage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const [vocabulary, settings] = await Promise.all([
     getEntityVocabulary(),

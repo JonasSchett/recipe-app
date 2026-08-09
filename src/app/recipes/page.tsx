@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -7,15 +6,14 @@ import {
   recipeBrowserProps,
   type RecipeBrowserParams,
 } from "@/components/recipe-browser";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 
 export default async function RecipesPage({
   searchParams,
 }: {
   searchParams: Promise<RecipeBrowserParams>;
 }) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const params = await searchParams;
 

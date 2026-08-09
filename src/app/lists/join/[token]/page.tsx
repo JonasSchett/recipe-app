@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { CHANGE_PASSWORD_PATH, getCurrentUser } from "@/lib/auth-guards";
 import { getListByShareToken } from "@/lib/queries";
 import { joinListByToken } from "@/lib/actions/lists";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ export default async function JoinListPage({
   // Come back here after signing in, so a link sent to someone without a
   // session still lands them on the list.
   if (!user) redirect(`/login?callbackUrl=/lists/join/${token}`);
+  if (user.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
 
   const list = await getListByShareToken(token);
 

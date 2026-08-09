@@ -1,14 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { TagHeartButton } from "@/components/tag-heart-button";
 import { AddTagForm } from "@/components/add-tag-form";
-import { getCurrentUser } from "@/lib/auth-guards";
+import { requirePageUser } from "@/lib/auth-guards";
 import { getAllTags, getEntityVocabulary } from "@/lib/queries";
 
 export default async function TagsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  const user = await requirePageUser();
 
   const [tags, vocabulary] = await Promise.all([
     getAllTags(),
