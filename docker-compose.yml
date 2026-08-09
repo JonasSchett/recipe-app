@@ -36,7 +36,7 @@ services:
     environment:
       # Inside the compose network the database host is the `db` service.
       DATABASE_URL: postgresql://${POSTGRES_USER:-recipe}:${POSTGRES_PASSWORD:-recipe}@db:5432/${POSTGRES_DB:-recipe}?schema=public
-      # Public base URL served by your reverse proxy, e.g. https://recipes.schett.io
+      # Public base URL served by your reverse proxy, e.g. https://recipes.example.com
       AUTH_URL: ${AUTH_URL}
       NEXTAUTH_URL: ${AUTH_URL}
       AUTH_SECRET: ${AUTH_SECRET}

@@ -39,14 +39,14 @@ and the Docker stack; for the container, `docker-compose.yml` overrides
 | Variable | Required | Used by | Notes |
 | --- | --- | --- | --- |
 | `AUTH_SECRET` | yes | both | Session/JWT signing. `openssl rand -base64 32`. |
-| `AUTH_URL` | yes | both | Public base URL. Dev: `http://localhost:3000`. Prod: `https://recipes.schett.io`. |
+| `AUTH_URL` | yes | both | Public base URL. Dev: `http://localhost:3000`. Prod: `https://recipes.example.com`. |
 | `NEXTAUTH_URL` | yes | both | Same value as `AUTH_URL` (legacy alias). |
 | `GOOGLE_CLIENT_ID` | prod | both | Google OAuth client ID. |
 | `GOOGLE_CLIENT_SECRET` | prod | both | Google OAuth client secret. |
 | `AUTH_ALLOWED_EMAILS` | optional | both | Comma-separated allowlist of emails that may sign in. Empty = anyone who passes Google. |
 | `DATABASE_URL` | dev only | `npm run dev` | Local Postgres URL. Ignored in the container (compose sets it). |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | prod | compose | DB credentials; compose builds the container `DATABASE_URL` from these. Keep the password alphanumeric (no `@ : / ? # %`). |
-| `GHCR_OWNER` | prod | compose | GitHub owner for the image path, **lowercase** (e.g. `jonasschett`). |
+| `GHCR_OWNER` | prod | compose | GitHub owner for the image path, **lowercase** (e.g. `your-github-username`). |
 | `IMAGE_TAG` | prod | compose | Image tag to run (default `latest`; pin to a `sha-…`/`vX.Y.Z` if desired). |
 | `DATA_DIR` | prod | compose | Host directory for persistent data (`postgres/` + `uploads/`). |
 

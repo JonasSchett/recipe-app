@@ -6,12 +6,12 @@ read at runtime from `.env`, so nothing sensitive is baked into the image (the
 image can be — and is — public).
 
 ```
-browser ──https(443)──▶ Nginx Proxy Manager (*.schett.io cert) ──http──▶ NAS:3100 ──▶ app:3000
+browser ──https(443)──▶ Nginx Proxy Manager (*.example.com cert) ──http──▶ NAS:3100 ──▶ app:3000
                                                                                           │
                                                                                     db (internal)
 ```
 
-The walkthrough below is concrete for `recipes.schett.io` on Unraid, but applies
+The walkthrough below is concrete for `recipes.example.com` on Unraid, but applies
 to any Docker host + HTTPS reverse proxy.
 
 ## Prerequisites
@@ -19,8 +19,8 @@ to any Docker host + HTTPS reverse proxy.
 - A Docker host. On Unraid: install the **Docker Compose Manager** plugin
   (Community Apps).
 - A reverse proxy terminating **HTTPS** with a valid cert — Google OAuth requires
-  https. We use Nginx Proxy Manager with the `*.schett.io` wildcard cert.
-- A hostname pointing at the host (e.g. `recipes.schett.io`). LAN-only is fine —
+  https. We use Nginx Proxy Manager with the `*.example.com` wildcard cert.
+- A hostname pointing at the host (e.g. `recipes.example.com`). LAN-only is fine —
   Google never connects to the app, it only redirects your browser.
 - A Google OAuth client (step 1).
 
@@ -29,8 +29,8 @@ to any Docker host + HTTPS reverse proxy.
 In Google Cloud Console → Credentials → Create OAuth client ID → **Web
 application** (a dedicated client; the same project as other apps is fine):
 
-- **Authorized JavaScript origin:** `https://recipes.schett.io`
-- **Authorized redirect URI:** `https://recipes.schett.io/api/auth/callback/google`
+- **Authorized JavaScript origin:** `https://recipes.example.com`
+- **Authorized redirect URI:** `https://recipes.example.com/api/auth/callback/google`
 
 Keep the consent screen in **Testing** and add your Google account as a test
 user, so only you can sign in. (Also set `AUTH_ALLOWED_EMAILS`, below.)
@@ -42,12 +42,12 @@ Minimum for production:
 
 ```dotenv
 AUTH_SECRET=<openssl rand -base64 32>
-AUTH_URL=https://recipes.schett.io
-NEXTAUTH_URL=https://recipes.schett.io
+AUTH_URL=https://recipes.example.com
+NEXTAUTH_URL=https://recipes.example.com
 GOOGLE_CLIENT_ID=…
 GOOGLE_CLIENT_SECRET=…
 AUTH_ALLOWED_EMAILS=you@gmail.com        # lock sign-in to just you
-GHCR_OWNER=jonasschett                    # lowercase!
+GHCR_OWNER=your-github-username          # lowercase!
 IMAGE_TAG=latest
 DATA_DIR=/mnt/user/appdata/recipe-app
 POSTGRES_PASSWORD=<alphanumeric, no @ : / ? # %>
@@ -81,12 +81,12 @@ then `docker compose pull && docker compose up -d`.
 
 Add a Proxy Host:
 
-- **Domain:** `recipes.schett.io`
+- **Domain:** `recipes.example.com`
 - **Forward:** scheme `http` → `<nas-ip>` → port **`3100`** (host 3100 → container 3000)
-- **SSL:** `*.schett.io` cert, Force SSL, HTTP/2
+- **SSL:** `*.example.com` cert, Force SSL, HTTP/2
 - **Websockets support:** on
 
-Point `recipes.schett.io` at the NAS the same way as your other local-only hosts
+Point `recipes.example.com` at the NAS the same way as your other local-only hosts
 (local DNS + your usual access restriction). Note: Google sign-in only works
 through the https hostname — hitting `http://<nas-ip>:3100` directly fails OAuth.
 
