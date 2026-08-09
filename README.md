@@ -45,7 +45,7 @@ and the Docker stack; for the container, `docker-compose.yml` overrides
 | `NEXTAUTH_URL` | yes | both | Same value as `AUTH_URL` (legacy alias). |
 | `GOOGLE_CLIENT_ID` | prod | both | Google OAuth client ID. |
 | `GOOGLE_CLIENT_SECRET` | prod | both | Google OAuth client secret. |
-| `AUTH_ALLOWED_EMAILS` | optional | both | Comma-separated allowlist of emails that may sign in. Empty = anyone who passes Google. Google only — password accounts are created by an admin. |
+| `AUTH_ALLOWED_EMAILS` | optional | both | Comma-separated allowlist for **Google** sign-in, combined with the in-app list (Manage users). Both empty = anyone who passes Google. Entries here can't be removed in-app. |
 | `DATABASE_URL` | dev only | `npm run dev` | Local Postgres URL. Ignored in the container (compose sets it). |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | prod | compose | DB credentials; compose builds the container `DATABASE_URL` from these. Keep the password alphanumeric (no `@ : / ? # %`). |
 | `GHCR_OWNER` | prod | compose | GitHub owner for the image path, **lowercase** (e.g. `your-github-username`). |
@@ -77,6 +77,14 @@ that's how a password-only install gets its first way in, since
 Passwords are stored as salted scrypt digests (Node's built-in `crypto`, no
 extra dependency). Changing or resetting a password signs that account out
 everywhere else.
+
+**Who may sign in with Google** is managed from **Account → Manage users** — add
+an address and that person can sign in, no `.env` edit or restart needed. The
+effective allowlist is `AUTH_ALLOWED_EMAILS` **plus** those entries, and env
+entries can't be removed in-app, so they're your way back in. With both empty
+there is no restriction and any Google account is accepted, which the admin page
+warns about. Removing someone also ends their sessions immediately; their
+recipes and lists are kept.
 
 ## Local development
 

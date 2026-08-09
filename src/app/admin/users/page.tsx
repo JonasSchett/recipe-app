@@ -2,18 +2,24 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreateAccountForm } from "@/components/create-account-form";
+import { GoogleAllowlistPanel } from "@/components/google-allowlist-panel";
 import { ResetPasswordButton } from "@/components/reset-password-button";
 import { UserRoleToggle } from "@/components/user-role-toggle";
 import { isAdmin, requirePageUser } from "@/lib/auth-guards";
 import { isAuthMethodEnabled, passwordIdentifier } from "@/lib/auth-methods";
-import { getAllUsers } from "@/lib/queries";
+import { getAllUsers, getGoogleAllowlist } from "@/lib/queries";
 
 export default async function AdminUsersPage() {
   const user = await requirePageUser();
   if (!isAdmin(user)) redirect("/");
 
-  const users = await getAllUsers();
+  const googleAuth = isAuthMethodEnabled("google");
   const passwordAuth = isAuthMethodEnabled("password");
+  const [users, allowlist] = await Promise.all([
+    getAllUsers(),
+    // Only meaningful where Google sign-in is actually offered.
+    googleAuth ? getGoogleAllowlist() : Promise.resolve(null),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -23,6 +29,14 @@ export default async function AdminUsersPage() {
           Manage who has admin access. Admins can edit and delete any recipe.
         </p>
       </div>
+
+      {allowlist && (
+        <GoogleAllowlistPanel
+          entries={allowlist.entries}
+          fromEnv={allowlist.fromEnv}
+          open={allowlist.open}
+        />
+      )}
 
       {/* Account creation only exists where password sign-in is turned on —
           Google accounts create themselves on first sign-in. */}

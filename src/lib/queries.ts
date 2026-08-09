@@ -16,6 +16,7 @@ import {
   TAG_TRANSLATIONS,
 } from "@/lib/i18n/dictionary";
 import { isAuthMethodEnabled } from "@/lib/auth-methods";
+import { envAllowedEmails } from "@/lib/allowed-emails";
 import { withDictionary, type EntitySuggestion } from "@/lib/suggest";
 import { searchRecipeIds } from "@/lib/recipe-search";
 import { getListPermission, listAccessWhere } from "@/lib/list-access";
@@ -515,6 +516,31 @@ export async function getEntityVocabulary(): Promise<{
       TAG_TRANSLATIONS,
       "tag",
     ),
+  };
+}
+
+/**
+ * The Google allowlist for the admin page: entries from the database (which an
+ * admin can remove) alongside those pinned by `AUTH_ALLOWED_EMAILS` (which they
+ * can't, since they come from the environment).
+ *
+ * `open` reports the state where nothing restricts sign-in at all, so the page
+ * can say so plainly rather than showing a reassuring empty list.
+ */
+export async function getGoogleAllowlist() {
+  await requireAdmin();
+  const [entries, fromEnv] = await Promise.all([
+    prisma.allowedEmail.findMany({
+      orderBy: { email: "asc" },
+      select: { id: true, email: true, createdAt: true },
+    }),
+    Promise.resolve(envAllowedEmails()),
+  ]);
+
+  return {
+    entries,
+    fromEnv,
+    open: entries.length === 0 && fromEnv.length === 0,
   };
 }
 

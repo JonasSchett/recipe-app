@@ -121,6 +121,14 @@ that hasn't left this machine.
   first sign-in. An empty instance offers one-time first-admin setup on
   `/login` — `AUTH_ADMIN_EMAILS` fires on the NextAuth sign-in event, which a
   password-only deployment never reaches, so without it there'd be no way in.
+- **Google allowlist**: `lib/allowed-emails.ts` decides who may sign in with
+  Google — `AUTH_ALLOWED_EMAILS` **union** the `AllowedEmail` table (admin-
+  managed, no restart). Both empty means *no restriction*, which is what the app
+  did before the table existed; preserve that, or adding an allowlist feature
+  silently locks existing deployments out. Env entries are deliberately not
+  removable in-app so an admin can't strand themselves. Removing an entry also
+  revokes that user's sessions, because the `signIn` callback only runs at
+  sign-in and they would otherwise keep access for up to 30 days.
 - `email` and `username` are both nullable and both unique: a Google account
   has no username, a username account has no email. Anything rendering an
   identifier must handle either being null.

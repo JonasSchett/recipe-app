@@ -45,6 +45,7 @@ model User {
   notes         RecipeNote[]
   ownedLists    RecipeList[]
   listMemberships RecipeListMember[]
+  allowedEmails AllowedEmail[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -74,6 +75,26 @@ model User {
   /// — the schema default below and the Zod default both stay PRIVATE, so a
   /// payload that omits visibility can never publish by accident.
   defaultRecipeVisibility Visibility @default(PRIVATE)
+}
+
+/// An email address allowed to sign in with Google, managed from the admin page.
+///
+/// The effective allowlist is this table plus `AUTH_ALLOWED_EMAILS`; the env var
+/// stays as the bootstrap so an existing deployment keeps working and an admin
+/// cannot lock themselves out by deleting the last row here. Both empty means
+/// no restriction, which is what the app did before this table existed.
+/// See `lib/allowed-emails.ts`.
+model AllowedEmail {
+  id        String   @id @default(cuid())
+  /// Stored lowercased; Google decides the casing it sends, so matching folds.
+  email     String   @unique
+  /// Who added it. Nulled rather than cascading, so removing an admin doesn't
+  /// silently revoke everyone they let in.
+  addedById String?
+  addedBy   User?    @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([addedById])
 }
 
 model Account {

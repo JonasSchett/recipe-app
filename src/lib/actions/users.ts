@@ -37,6 +37,53 @@ export async function setUserRole(userId: string, role: "ADMIN" | "USER") {
   return { id: userId, role: parsed };
 }
 
+// --- Google allowlist -------------------------------------------------------
+
+/**
+ * Let an email address sign in with Google. Admin-only.
+ *
+ * Adding the first entry turns the gate *on* for everyone: with both the env
+ * var and this table empty the app accepts any Google account, so the UI warns
+ * about that before the first add.
+ */
+export async function allowGoogleEmail(email: string) {
+  const actor = await requireAdmin();
+  const parsed = listInviteEmailSchema.parse(email);
+
+  await prisma.allowedEmail.upsert({
+    where: { email: parsed },
+    create: { email: parsed, addedById: actor.id },
+    update: {},
+  });
+
+  revalidatePath("/admin/users");
+  return { email: parsed };
+}
+
+/**
+ * Withdraw an address. Admin-only.
+ *
+ * Also ends that person's sessions: the `signIn` callback only runs at sign-in,
+ * so without this they would keep a working session for up to 30 days and
+ * "removed" wouldn't mean what an admin reasonably expects. Their recipes and
+ * data are untouched — this revokes access, it doesn't delete an account.
+ */
+export async function disallowGoogleEmail(email: string) {
+  await requireAdmin();
+  const parsed = listInviteEmailSchema.parse(email);
+
+  await prisma.allowedEmail.deleteMany({ where: { email: parsed } });
+
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: parsed, mode: "insensitive" } },
+    select: { id: true },
+  });
+  if (user) await revokeOtherSessions(user.id, null);
+
+  revalidatePath("/admin/users");
+  return { email: parsed, signedOut: user !== null };
+}
+
 // --- Password accounts ------------------------------------------------------
 //
 // There is no self-registration: an admin creates the account and hands over a

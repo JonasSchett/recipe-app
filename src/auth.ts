@@ -3,16 +3,7 @@ import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import { consumePendingListInvites } from "@/lib/list-invites";
-
-/** Parse a comma-separated env list of emails into lowercased, trimmed entries. */
-function parseEmailList(value: string | undefined): string[] {
-  return (
-    value
-      ?.split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean) ?? []
-  );
-}
+import { isGoogleEmailAllowed, parseEmailList } from "@/lib/allowed-emails";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -27,13 +18,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    // Optional access control: if AUTH_ALLOWED_EMAILS is set (comma-separated),
-    // only those Google accounts may sign in. Empty/unset = anyone who passes
-    // Google sign-in is allowed. (The dev sign-in path bypasses this.)
+    // Optional access control over Google sign-in: AUTH_ALLOWED_EMAILS plus the
+    // admin-managed AllowedEmail table. Both empty = anyone who passes Google.
+    // See lib/allowed-emails.ts. (The dev sign-in path bypasses this.)
     signIn({ user }) {
-      const allowed = parseEmailList(process.env.AUTH_ALLOWED_EMAILS);
-      if (allowed.length === 0) return true;
-      return !!user.email && allowed.includes(user.email.toLowerCase());
+      return isGoogleEmailAllowed(user.email);
     },
     // Expose the user id and role on the session for authorization checks.
     // Free with database sessions: the full user row is already loaded here.
