@@ -466,6 +466,48 @@ and `unaccent` extensions.
   actions, so the selection stays a concrete set you can still deselect from.
 - HEIC uploads (needs `sharp`; see PLAN.md §8.1).
 
+- **Sign-in methods per *account*, and both password identifiers at once.**
+  Two distinct gaps left by the auth work in `97ccdee` / `56f0b55`.
+
+  First, **what already works**, so it isn't rebuilt by mistake:
+  `AUTH_METHODS="google,password"` already offers Google *and* password on the
+  login page together, and `AUTH_PASSWORD_IDENTIFIER="email"` already gives
+  email + password behaving exactly like username + password. Both of those are
+  per-*deployment* settings. The gaps below are per-*account*.
+
+  1. **One account, several methods.** A user is either a Google account or a
+     password account, never both. `createUserAccount` rejects an identifier
+     that already exists ("That account already exists."), so an existing
+     Google user can't be given a password, and `changeMyPassword` refuses
+     outright ("This account signs in with Google and has no password."). The
+     schema already permits it — `passwordHash` and the OAuth `Account` rows
+     are independent and both optional — so this is mostly about dropping those
+     two guards and adding a "set a password" flow on `/account`.
+
+     **Security note, don't skip it:** the unique constraints on `User.email`
+     and `User.username` mean this has to decide what happens when a Google
+     sign-in arrives for an address a password account already owns. Silently
+     adopting it is account takeover by anyone who can get a Google address —
+     which is why Auth.js has a distinct `OAuthAccountNotLinked` error. Linking
+     must be initiated from an already-signed-in session, never inferred from a
+     matching address.
+
+  2. **Username and email password accounts side by side.**
+     `AUTH_PASSWORD_IDENTIFIER` is one switch for the whole server:
+     `passwordIdentifier()` returns a single value, `signInWithPassword` looks
+     up only that column, and `createUserAccount` writes only that column. So a
+     deployment must choose — you can't have some people on usernames and
+     others on emails. Supporting both means resolving a typed identifier
+     against `username` **or** `email` (`shareListWithEmail` already does this;
+     the presence of `@` decides) and letting account creation pick the column
+     per account rather than per server. The env var would then become a
+     default for the create form rather than a global mode.
+
+     Keep the failure message identical for "no such account" and "wrong
+     password" when doing this — the current generic message plus
+     `fakeVerifyDelay()` is what stops the login form being used to discover
+     who has an account.
+
 Each step: `npm run build` (the typecheck gate) + `npm run lint`, and end-to-end
 verification via the `verify` skill before committing.
 
