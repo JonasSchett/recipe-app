@@ -56,11 +56,6 @@ export const userSettingsSchema = z.object({
 export type UserSettingsInput = z.infer<typeof userSettingsSchema>;
 
 export const tagNameSchema = z.string().trim().min(1, "Tag name is required").max(50);
-export const ingredientNameSchema = z
-  .string()
-  .trim()
-  .min(1, "Ingredient name is required")
-  .max(100);
 
 // --- Shared recipe lists ----------------------------------------------------
 

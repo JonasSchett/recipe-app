@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { moveListItem, removeRecipeFromList } from "@/lib/actions/lists";
+import { useAction } from "@/lib/use-action";
 
 /**
  * Reorder / unpin controls for one recipe on a list. Rendered only for editors
@@ -26,21 +25,7 @@ export function ListItemActions({
   isFirst: boolean;
   isLast: boolean;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function run(action: () => Promise<unknown>, failure: string) {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await action();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : failure);
-      }
-    });
-  }
+  const { pending, error, run } = useAction();
 
   return (
     <div className="flex items-center gap-1">
@@ -49,7 +34,11 @@ export function ListItemActions({
         variant="ghost"
         size="icon"
         disabled={pending || isFirst}
-        onClick={() => run(() => moveListItem(listId, recipeId, "up"), "Could not move it.")}
+        onClick={() =>
+          run(() => moveListItem(listId, recipeId, "up"), {
+            failure: "Could not move it.",
+          })
+        }
         aria-label={`Move ${title} up`}
       >
         <ArrowUp className="h-4 w-4" />
@@ -59,7 +48,11 @@ export function ListItemActions({
         variant="ghost"
         size="icon"
         disabled={pending || isLast}
-        onClick={() => run(() => moveListItem(listId, recipeId, "down"), "Could not move it.")}
+        onClick={() =>
+          run(() => moveListItem(listId, recipeId, "down"), {
+            failure: "Could not move it.",
+          })
+        }
         aria-label={`Move ${title} down`}
       >
         <ArrowDown className="h-4 w-4" />
@@ -70,7 +63,9 @@ export function ListItemActions({
         size="icon"
         disabled={pending}
         onClick={() =>
-          run(() => removeRecipeFromList(listId, recipeId), "Could not unpin it.")
+          run(() => removeRecipeFromList(listId, recipeId), {
+            failure: "Could not unpin it.",
+          })
         }
         aria-label={`Unpin ${title}`}
       >

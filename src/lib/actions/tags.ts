@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireUser } from "@/lib/auth-guards";
+import { requireUser } from "@/lib/auth-guards";
 import { tagNameSchema } from "@/lib/validations";
 import { resolveTags } from "@/lib/actions/_shared";
 
@@ -39,22 +39,4 @@ export async function createTag(name: string) {
   const tag = await prisma.tag.findUniqueOrThrow({ where: { id: resolved.tagId } });
   revalidatePath("/tags");
   return tag;
-}
-
-/** Rename a tag (admin only). */
-export async function renameTag(id: string, name: string) {
-  await requireAdmin();
-  const parsed = tagNameSchema.parse(name);
-  const tag = await prisma.tag.update({ where: { id }, data: { name: parsed } });
-  revalidatePath("/tags");
-  return tag;
-}
-
-/** Delete a tag (admin only). Recipe links cascade. */
-export async function deleteTag(id: string) {
-  await requireAdmin();
-  await prisma.tag.delete({ where: { id } });
-  revalidatePath("/tags");
-  revalidatePath("/");
-  return { id };
 }

@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Copy, Link2, Mail, RefreshCw, Share2, UserMinus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +12,7 @@ import {
   setListShareLink,
   shareListWithEmail,
 } from "@/lib/actions/lists";
+import { useAction } from "@/lib/use-action";
 
 type Member = {
   userId: string;
@@ -40,28 +40,14 @@ export function ListSharePanel({
   invites: Invite[];
   privateRecipeCount: number;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
 
   const shareUrl = shareToken
     ? `${typeof window === "undefined" ? "" : window.location.origin}/lists/join/${shareToken}`
     : null;
-
-  function run(action: () => Promise<unknown>, failure: string) {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await action();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : failure);
-      }
-    });
-  }
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border p-4">
@@ -113,10 +99,9 @@ export function ListSharePanel({
                 size="sm"
                 disabled={pending}
                 onClick={() =>
-                  run(
-                    () => setListShareLink(listId, true, shareRole),
-                    "Could not rotate the link.",
-                  )
+                  run(() => setListShareLink(listId, true, shareRole), {
+                    failure: "Could not rotate the link.",
+                  })
                 }
               >
                 <RefreshCw className="h-4 w-4" /> New link
@@ -127,10 +112,9 @@ export function ListSharePanel({
                 size="sm"
                 disabled={pending}
                 onClick={() =>
-                  run(
-                    () => setListShareLink(listId, false),
-                    "Could not turn sharing off.",
-                  )
+                  run(() => setListShareLink(listId, false), {
+                    failure: "Could not turn sharing off.",
+                  })
                 }
               >
                 Turn off
@@ -149,10 +133,9 @@ export function ListSharePanel({
               size="sm"
               disabled={pending}
               onClick={() =>
-                run(
-                  () => setListShareLink(listId, true, "EDITOR"),
-                  "Could not create a link.",
-                )
+                run(() => setListShareLink(listId, true, "EDITOR"), {
+                  failure: "Could not create a link.",
+                })
               }
             >
               Create link (can edit)
@@ -163,10 +146,9 @@ export function ListSharePanel({
               size="sm"
               disabled={pending}
               onClick={() =>
-                run(
-                  () => setListShareLink(listId, true, "VIEWER"),
-                  "Could not create a link.",
-                )
+                run(() => setListShareLink(listId, true, "VIEWER"), {
+                  failure: "Could not create a link.",
+                })
               }
             >
               Create link (view only)
@@ -186,21 +168,17 @@ export function ListSharePanel({
             e.preventDefault();
             const value = email.trim();
             if (!value) return;
-            setError(null);
             setNotice(null);
-            startTransition(async () => {
-              try {
-                const result = await shareListWithEmail(listId, value, "EDITOR");
+            run(() => shareListWithEmail(listId, value, "EDITOR"), {
+              failure: "Could not share.",
+              onSuccess: (result) => {
                 setEmail("");
                 setNotice(
                   result.status === "added"
                     ? `${result.email} now has access.`
                     : `${result.email} has no account yet — they'll get access the first time they sign in.`,
                 );
-                router.refresh();
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not share.");
-              }
+              },
             });
           }}
         >
@@ -238,10 +216,9 @@ export function ListSharePanel({
                   disabled={pending}
                   aria-label={`Revoke invite for ${invite.email}`}
                   onClick={() =>
-                    run(
-                      () => revokeListInvite(listId, invite.email),
-                      "Could not revoke the invite.",
-                    )
+                    run(() => revokeListInvite(listId, invite.email), {
+                      failure: "Could not revoke the invite.",
+                    })
                   }
                 >
                   <X className="h-4 w-4" />
@@ -280,7 +257,7 @@ export function ListSharePanel({
                           member.userId,
                           member.role === "EDITOR" ? "VIEWER" : "EDITOR",
                         ),
-                      "Could not change their role.",
+                      { failure: "Could not change their role." },
                     )
                   }
                 >
@@ -293,10 +270,9 @@ export function ListSharePanel({
                   disabled={pending}
                   aria-label={`Remove ${member.user.name ?? member.user.email}`}
                   onClick={() =>
-                    run(
-                      () => removeListMember(listId, member.userId),
-                      "Could not remove them.",
-                    )
+                    run(() => removeListMember(listId, member.userId), {
+                      failure: "Could not remove them.",
+                    })
                   }
                 >
                   <UserMinus className="h-4 w-4" />

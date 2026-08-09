@@ -14,6 +14,30 @@ import {
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
+/** The query string this view reads: `?q=&tags=a,b&ingredients=c&page=2`. */
+export type RecipeBrowserParams = {
+  q?: string;
+  tags?: string;
+  ingredients?: string;
+  page?: string;
+};
+
+/**
+ * Turn those raw query params into `RecipeBrowser` props. Both pages that host
+ * the browser share it, so the URL contract is defined once next to the
+ * component that owns it.
+ */
+export function recipeBrowserProps(params: RecipeBrowserParams) {
+  const ids = (value?: string) =>
+    value ? value.split(",").filter(Boolean) : [];
+  return {
+    search: params.q ?? "",
+    tagIds: ids(params.tags),
+    ingredientIds: ids(params.ingredients),
+    page: params.page ? Number(params.page) : 1,
+  };
+}
+
 /**
  * The filterable, paginated "All Recipes" view: a multi-select filter over the
  * recipes the current user may see. Shared by the dashboard (`/`) and the

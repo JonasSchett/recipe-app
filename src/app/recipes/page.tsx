@@ -2,27 +2,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { RecipeBrowser } from "@/components/recipe-browser";
+import {
+  RecipeBrowser,
+  recipeBrowserProps,
+  type RecipeBrowserParams,
+} from "@/components/recipe-browser";
 import { getCurrentUser } from "@/lib/auth-guards";
-
-function parseList(value?: string): string[] {
-  return value ? value.split(",").filter(Boolean) : [];
-}
 
 export default async function RecipesPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    q?: string;
-    tags?: string;
-    ingredients?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<RecipeBrowserParams>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const { q, tags, ingredients, page } = await searchParams;
+  const params = await searchParams;
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,13 +28,7 @@ export default async function RecipesPage({
         </Link>
       </div>
 
-      <RecipeBrowser
-        basePath="/recipes"
-        search={q ?? ""}
-        tagIds={parseList(tags)}
-        ingredientIds={parseList(ingredients)}
-        page={page ? Number(page) : 1}
-      />
+      <RecipeBrowser basePath="/recipes" {...recipeBrowserProps(params)} />
     </div>
   );
 }

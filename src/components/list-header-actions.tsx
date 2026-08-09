@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { LogOut, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deleteList, leaveList, renameList } from "@/lib/actions/lists";
 import type { ListPermission } from "@/lib/list-access";
+import { useAction } from "@/lib/use-action";
 
 /** Rename/delete for an owner, Leave for a member. */
 export function ListHeaderActions({
@@ -19,27 +20,14 @@ export function ListHeaderActions({
   permission: ListPermission;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
-  const [error, setError] = useState<string | null>(null);
-
-  function run(action: () => Promise<unknown>, after: () => void, failure: string) {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await action();
-        after();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : failure);
-      }
-    });
-  }
+  const { pending, error, setError, run } = useAction();
 
   // Navigating to /lists after delete/leave needs no router.refresh(): the
   // actions call revalidatePath("/lists"), which already drops the client
   // router cache entry. Verified by removing it and watching the index still
-  // come back correct.
+  // come back correct. Hence `refresh: false` on those two.
 
   if (permission !== "OWNER") {
     return (
@@ -51,7 +39,11 @@ export function ListHeaderActions({
           disabled={pending}
           onClick={() => {
             if (!confirm("Leave this list? You'll lose access to it.")) return;
-            run(() => leaveList(listId), () => router.push("/lists"), "Could not leave.");
+            run(() => leaveList(listId), {
+              failure: "Could not leave.",
+              onSuccess: () => router.push("/lists"),
+              refresh: false,
+            });
           }}
         >
           <LogOut className="h-4 w-4" /> Leave list
@@ -77,14 +69,10 @@ export function ListHeaderActions({
             size="sm"
             disabled={pending || !draft.trim()}
             onClick={() =>
-              run(
-                () => renameList(listId, draft.trim()),
-                () => {
-                  setEditing(false);
-                  router.refresh();
-                },
-                "Could not rename.",
-              )
+              run(() => renameList(listId, draft.trim()), {
+                failure: "Could not rename.",
+                onSuccess: () => setEditing(false),
+              })
             }
           >
             Save
@@ -127,11 +115,11 @@ export function ListHeaderActions({
           disabled={pending}
           onClick={() => {
             if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
-            run(
-              () => deleteList(listId),
-              () => router.push("/lists"),
-              "Could not delete.",
-            );
+            run(() => deleteList(listId), {
+              failure: "Could not delete.",
+              onSuccess: () => router.push("/lists"),
+              refresh: false,
+            });
           }}
         >
           <Trash2 className="h-4 w-4" /> Delete list

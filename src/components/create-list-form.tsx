@@ -1,33 +1,29 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createList } from "@/lib/actions/lists";
+import { useAction } from "@/lib/use-action";
 
 /** Create a new list and go straight to it. */
 export function CreateListForm() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const value = name.trim();
     if (!value) return;
-    setError(null);
-    startTransition(async () => {
-      try {
-        const { id } = await createList(value);
+    run(() => createList(value), {
+      failure: "Could not create the list.",
+      onSuccess: ({ id }) => {
         setName("");
         router.push(`/lists/${id}`);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not create the list.");
-      }
+      },
     });
   }
 

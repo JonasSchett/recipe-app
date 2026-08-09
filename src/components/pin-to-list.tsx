@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Pin, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { addRecipesToList, createList } from "@/lib/actions/lists";
+import { useAction } from "@/lib/use-action";
 
 export type PinnableList = { id: string; name: string; _count: { items: number } };
 
@@ -26,13 +26,11 @@ export function PinToList({
   recipeId: string;
   lists: PinnableList[];
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
   const [newName, setNewName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [lastListId, setLastListId] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
 
   /**
    * Read the remembered list when the picker opens rather than in an effect:
@@ -51,41 +49,39 @@ export function PinToList({
   }
 
   function pin(listId: string, listName: string) {
-    setError(null);
     setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await addRecipesToList(listId, [recipeId]);
+    run(() => addRecipesToList(listId, [recipeId]), {
+      failure: "Could not pin it.",
+      onSuccess: (result) => {
         remember(listId);
         setMessage(
           result.added > 0 ? `Pinned to ${listName}.` : `Already on ${listName}.`,
         );
         setOpen(false);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not pin it.");
-      }
+      },
     });
   }
 
   function pinToNew() {
     const name = newName.trim();
     if (!name) return;
-    setError(null);
     setMessage(null);
-    startTransition(async () => {
-      try {
+    run(
+      async () => {
         const { id } = await createList(name);
         await addRecipesToList(id, [recipeId]);
-        remember(id);
-        setNewName("");
-        setMessage(`Pinned to ${name}.`);
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not create the list.");
-      }
-    });
+        return id;
+      },
+      {
+        failure: "Could not create the list.",
+        onSuccess: (id) => {
+          remember(id);
+          setNewName("");
+          setMessage(`Pinned to ${name}.`);
+          setOpen(false);
+        },
+      },
+    );
   }
 
   // Most recently pinned-to list first, so the usual target is at the top.

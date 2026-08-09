@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setUserRole } from "@/lib/actions/users";
+import { useAction } from "@/lib/use-action";
 
 export function UserRoleToggle({
   userId,
@@ -15,9 +14,7 @@ export function UserRoleToggle({
   role: "ADMIN" | "USER";
   isSelf: boolean;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
 
   // Your own role can't be changed here (prevents self-lockout).
   if (isSelf) {
@@ -27,14 +24,8 @@ export function UserRoleToggle({
   const promote = role !== "ADMIN";
 
   function toggle() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await setUserRole(userId, promote ? "ADMIN" : "USER");
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update role.");
-      }
+    run(() => setUserRole(userId, promote ? "ADMIN" : "USER"), {
+      failure: "Failed to update role.",
     });
   }
 

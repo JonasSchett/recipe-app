@@ -1,12 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { Carrot, CheckSquare, Pin, Plus, Tags, Trash2, X } from "lucide-react";
+import { useState } from "react";
+import { Carrot, CheckSquare, Pin, Plus, Tags, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
+import {
+  EMPTY_INGREDIENT_ROW,
+  IngredientRows,
+  parseIngredientRows,
+  type IngredientRow,
+} from "@/components/ingredient-rows";
 import { useSelection } from "@/components/recipe-selection";
 import {
   addIngredientsToRecipes,
@@ -14,10 +19,9 @@ import {
   getSelectableRecipeIds,
 } from "@/lib/actions/batch";
 import { addRecipesToList } from "@/lib/actions/lists";
+import { useAction } from "@/lib/use-action";
 import type { PinnableList } from "@/components/pin-to-list";
 import type { EntitySuggestion } from "@/lib/suggest";
-
-type IngredientRow = { name: string; quantity: string; unit: string };
 
 /**
  * Turns selection mode on and off. Sits next to the result count rather than
@@ -63,17 +67,13 @@ export function BatchActionBar({
   /** How many recipes match it in total, across every page. */
   totalMatching: number;
 }) {
-  const router = useRouter();
   const { active, selected, selectMany, clear, setActive } = useSelection();
   const [panel, setPanel] = useState<null | "tags" | "ingredients" | "lists">(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
-  const [rows, setRows] = useState<IngredientRow[]>([
-    { name: "", quantity: "", unit: "" },
-  ]);
-  const [pending, startTransition] = useTransition();
+  const [rows, setRows] = useState<IngredientRow[]>([EMPTY_INGREDIENT_ROW]);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, setError, run } = useAction();
 
   if (!active) return null;
 
@@ -92,30 +92,26 @@ export function BatchActionBar({
     setPanel(null);
     setTags([]);
     setTagDraft("");
-    setRows([{ name: "", quantity: "", unit: "" }]);
+    setRows([EMPTY_INGREDIENT_ROW]);
     setError(null);
   }
 
   /** Run a batch action and report what it actually did. */
   function apply(
-    run: () => Promise<{ updated: number; skipped: number }>,
+    action: () => Promise<{ updated: number; skipped: number }>,
     failure: string,
   ) {
-    setError(null);
     setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await run();
+    run(action, {
+      failure,
+      onSuccess: (result) => {
         setMessage(
           `Added to ${result.updated} recipe${result.updated === 1 ? "" : "s"}` +
             (result.skipped > 0 ? ` · ${result.skipped} skipped (not yours)` : ""),
         );
         closePanel();
         clear();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : failure);
-      }
+      },
     });
   }
 
@@ -129,23 +125,16 @@ export function BatchActionBar({
   const filledRows = rows.filter((row) => row.name.trim());
 
   function applyIngredients() {
-    const parsed = filledRows.map((row) => {
-      const quantity = row.quantity.trim();
-      return {
-        name: row.name.trim(),
-        quantity: quantity === "" ? null : Number(quantity),
-        unit: row.unit.trim() || null,
-      };
-    });
-    if (parsed.some((i) => i.quantity !== null && !(i.quantity! > 0))) {
-      setError("Ingredient quantities must be positive numbers.");
+    const parsed = parseIngredientRows(rows);
+    if (!parsed.ok) {
+      setError(parsed.error);
       return;
     }
     apply(
       () =>
         addIngredientsToRecipes({
           recipeIds: [...selected],
-          ingredients: parsed,
+          ingredients: parsed.ingredients,
         }),
       "Failed to add ingredients.",
     );
@@ -157,21 +146,17 @@ export function BatchActionBar({
    * so "not yours" would be the wrong words.
    */
   function pinToList(listId: string, listName: string) {
-    setError(null);
     setMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await addRecipesToList(listId, [...selected]);
+    run(() => addRecipesToList(listId, [...selected]), {
+      failure: "Could not pin them.",
+      onSuccess: (result) => {
         setMessage(
           `Pinned ${result.added} recipe${result.added === 1 ? "" : "s"} to ${listName}` +
             (result.skipped > 0 ? ` · ${result.skipped} already there` : ""),
         );
         closePanel();
         clear();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not pin them.");
-      }
+      },
     });
   }
 
@@ -182,27 +167,20 @@ export function BatchActionBar({
    * batch can take, which the message spells out when it bites.
    */
   function selectAllMatching() {
-    setError(null);
     setMessage(null);
-    startTransition(async () => {
-      try {
-        const { ids, total } = await getSelectableRecipeIds(filter);
+    run(() => getSelectableRecipeIds(filter), {
+      failure: "Could not select them all.",
+      // Purely a client-side selection change — nothing on the server moved.
+      refresh: false,
+      onSuccess: ({ ids, total }) => {
         selectMany(ids);
         if (ids.length < total) {
           setMessage(
             `Selected ${ids.length} of ${total} — the most one batch can take. Apply, then select the rest.`,
           );
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not select them all.");
-      }
+      },
     });
-  }
-
-  function updateRow(index: number, patch: Partial<IngredientRow>) {
-    setRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    );
   }
 
   return (
@@ -274,51 +252,13 @@ export function BatchActionBar({
         {panel === "ingredients" && (
           <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-2 border-b pb-3">
             <div className="flex max-h-52 flex-col gap-2 overflow-y-auto">
-              {rows.map((row, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    className="w-20"
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={row.quantity}
-                    onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                    placeholder="Qty"
-                    aria-label={`Batch ingredient ${i + 1} quantity`}
-                  />
-                  <Input
-                    className="w-24"
-                    value={row.unit}
-                    onChange={(e) => updateRow(i, { unit: e.target.value })}
-                    placeholder="Unit"
-                    aria-label={`Batch ingredient ${i + 1} unit`}
-                  />
-                  <EntityAutocomplete
-                    className="flex-1"
-                    value={row.name}
-                    onValueChange={(name) => updateRow(i, { name })}
-                    onPick={(match) => updateRow(i, { name: match.label })}
-                    vocabulary={ingredientVocabulary}
-                    exclude={rows
-                      .filter((_, other) => other !== i)
-                      .map((r) => r.name)}
-                    placeholder="Ingredient name"
-                    aria-label={`Batch ingredient ${i + 1} name`}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() =>
-                      setRows((prev) => prev.filter((_, x) => x !== i))
-                    }
-                    disabled={rows.length === 1}
-                    aria-label={`Remove batch ingredient ${i + 1}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+              <IngredientRows
+                rows={rows}
+                onRowsChange={setRows}
+                vocabulary={ingredientVocabulary}
+                labelPrefix="Batch ingredient"
+                keepOneRow
+              />
             </div>
             <Button
               type="button"
@@ -326,7 +266,7 @@ export function BatchActionBar({
               size="sm"
               className="self-start"
               onClick={() =>
-                setRows((prev) => [...prev, { name: "", quantity: "", unit: "" }])
+                setRows((prev) => [...prev, EMPTY_INGREDIENT_ROW])
               }
             >
               <Plus className="h-4 w-4" /> Add row

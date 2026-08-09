@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
 import { createTag } from "@/lib/actions/tags";
 import type { EntitySuggestion } from "@/lib/suggest";
+import { useAction } from "@/lib/use-action";
 
 /**
  * Standalone tag creation for the tags page. The autocomplete is the point:
@@ -15,25 +15,16 @@ import type { EntitySuggestion } from "@/lib/suggest";
  * suggestion is harmless anyway, since `createTag` resolves to the same entity.
  */
 export function AddTagForm({ vocabulary }: { vocabulary: EntitySuggestion[] }) {
-  const router = useRouter();
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { pending: busy, error, run } = useAction();
 
-  async function submit() {
+  function submit() {
     const name = draft.trim();
     if (!name || busy) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await createTag(name);
-      setDraft("");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create that tag.");
-    } finally {
-      setBusy(false);
-    }
+    run(() => createTag(name), {
+      failure: "Could not create that tag.",
+      onSuccess: () => setDraft(""),
+    });
   }
 
   return (
@@ -42,7 +33,7 @@ export function AddTagForm({ vocabulary }: { vocabulary: EntitySuggestion[] }) {
         className="flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void submit();
+          submit();
         }}
       >
         <EntityAutocomplete
@@ -50,7 +41,7 @@ export function AddTagForm({ vocabulary }: { vocabulary: EntitySuggestion[] }) {
           value={draft}
           onValueChange={setDraft}
           onPick={(match) => setDraft(match.label)}
-          onEnter={() => void submit()}
+          onEnter={submit}
           vocabulary={vocabulary}
           placeholder="Add a tag…"
           aria-label="Tag name"

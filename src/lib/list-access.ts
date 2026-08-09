@@ -1,4 +1,4 @@
-import type { ListRole, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/lib/auth-guards";
 
@@ -65,9 +65,4 @@ export async function requireListPermission(
     throw new Error("List not found.");
   }
   return permission;
-}
-
-/** Map a stored member role to the permission vocabulary above. */
-export function permissionOfRole(role: ListRole): ListPermission {
-  return role === "EDITOR" ? "EDITOR" : "VIEWER";
 }

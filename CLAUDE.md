@@ -66,6 +66,14 @@ that hasn't left this machine.
   functions (no `"use server"`); they apply visibility rules.
 - `src/lib/actions/*.ts` — **mutations** as Server Actions (`"use server"`).
   Every exported function must be async; keep non-exported helpers internal.
+  Every export is also a public HTTP endpoint, so don't leave unreachable ones
+  lying around.
+- `src/lib/use-action.ts` — `useAction()`, the client hook every mutating
+  control uses: runs an action in a transition and gives back
+  `{ pending, error, setError, run }`. `run(action, { failure, onSuccess,
+  onError, refresh })` refreshes on success by default; pass `refresh: false`
+  when the action navigates away or only changes client state. Don't hand-roll
+  the `useTransition` + try/catch + `setError` trio again.
 - UI lives in `src/app` (routes) and `src/components` (`ui/` = shadcn).
 
 ### Authorization model
@@ -73,11 +81,16 @@ that hasn't left this machine.
 - **ADMIN**: full access to all recipes, tags, ingredients.
 - **USER**: CRUD on their own recipes; can read their own + any `PUBLIC` recipe.
 - Reads are filtered by `visibilityWhere(user)` in `queries.ts`. Mutations call
-  `assertCanModifyRecipe` (owner or admin). Tag/ingredient rename & delete are
-  admin-only. Always re-check auth inside the action/query — never trust the
-  client.
+  `assertCanModifyRecipe` (owner or admin). Always re-check auth inside the
+  action/query — never trust the client.
+- There is **no admin rename/delete for a tag or ingredient entity**. Those
+  actions existed but no UI ever reached them, so they were removed; `/tags`
+  only hearts, links and adds. Re-add them next to the UI that needs them.
 - Tags and ingredients are created **seamlessly** by name when saving a recipe
-  (case-insensitive reuse); see `resolveTagIds` / `resolveIngredients`.
+  (case-insensitive, cross-lingual reuse); see `resolveTags` /
+  `resolveIngredients` in `actions/_shared.ts`. Both run one shared algorithm
+  over a per-domain `EntityStore`, so a fix reaches tags and ingredients at
+  once — that unification is the point, don't fork it back apart.
 
 ## Gotchas
 
@@ -129,6 +142,11 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   browser/OS prompts — and no secure context needed, unlike `getUserMedia`, so
   it works over plain http on the LAN. Desktop ignores `capture` and shows a
   picker.
+- The qty/unit/name ingredient editor is **one** component,
+  `components/ingredient-rows.tsx`, used by the recipe form and by the batch
+  bar's "add ingredients" panel. `parseIngredientRows` lives there too, so the
+  rule "a quantity must be a positive number" is stated once rather than in
+  both submit handlers.
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
 - **Notes** (`RecipeNote`) are a private notepad, one per (user, recipe) — not a
   comment thread. Anyone who can *view* a recipe may note it, so the guard in

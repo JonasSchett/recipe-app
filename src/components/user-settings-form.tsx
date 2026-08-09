@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { updateUserSettings } from "@/lib/actions/settings";
+import { useAction } from "@/lib/use-action";
 
 /**
  * Per-user settings, saved as soon as a control changes (no Save button) —
@@ -14,26 +14,23 @@ export function UserSettingsForm({
 }: {
   defaultRecipeVisibility: "PRIVATE" | "PUBLIC";
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [isPublic, setIsPublic] = useState(defaultRecipeVisibility === "PUBLIC");
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
 
   function onToggle(next: boolean) {
     const previous = isPublic;
     setIsPublic(next);
-    setError(null);
-    startTransition(async () => {
-      try {
-        await updateUserSettings({
+    run(
+      () =>
+        updateUserSettings({
           defaultRecipeVisibility: next ? "PUBLIC" : "PRIVATE",
-        });
-        router.refresh();
-      } catch (err) {
-        setIsPublic(previous);
-        setError(err instanceof Error ? err.message : "Failed to save.");
-      }
-    });
+        }),
+      {
+        failure: "Failed to save.",
+        // The checkbox moved before the write; put it back if it didn't land.
+        onError: () => setIsPublic(previous),
+      },
+    );
   }
 
   return (

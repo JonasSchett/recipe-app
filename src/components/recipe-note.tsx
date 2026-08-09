@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { NotebookPen, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { saveRecipeNote, deleteRecipeNote } from "@/lib/actions/notes";
+import { useAction } from "@/lib/use-action";
 
 /**
  * The current user's private note on a recipe — one notepad per person, not a
@@ -19,41 +19,31 @@ export function RecipeNote({
   recipeId: string;
   initialBody: string | null;
 }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [body, setBody] = useState(initialBody ?? "");
   const [draft, setDraft] = useState(initialBody ?? "");
   const [editing, setEditing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, setError, run } = useAction();
 
   function save() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        const next = draft.trim();
-        await saveRecipeNote(recipeId, next);
+    const next = draft.trim();
+    run(() => saveRecipeNote(recipeId, next), {
+      failure: "Failed to save the note.",
+      onSuccess: () => {
         setBody(next);
         setEditing(false);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save the note.");
-      }
+      },
     });
   }
 
   function remove() {
     if (!confirm("Delete this note?")) return;
-    setError(null);
-    startTransition(async () => {
-      try {
-        await deleteRecipeNote(recipeId);
+    run(() => deleteRecipeNote(recipeId), {
+      failure: "Failed to delete the note.",
+      onSuccess: () => {
         setBody("");
         setDraft("");
         setEditing(false);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to delete the note.");
-      }
+      },
     });
   }
 

@@ -2,23 +2,18 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipe-card";
-import { RecipeBrowser } from "@/components/recipe-browser";
+import {
+  RecipeBrowser,
+  recipeBrowserProps,
+  type RecipeBrowserParams,
+} from "@/components/recipe-browser";
 import { getCurrentUser } from "@/lib/auth-guards";
 import { getHeartedTagSections, getMyLists } from "@/lib/queries";
-
-function parseList(value?: string): string[] {
-  return value ? value.split(",").filter(Boolean) : [];
-}
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{
-    q?: string;
-    tags?: string;
-    ingredients?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<RecipeBrowserParams>;
 }) {
   const user = await getCurrentUser();
 
@@ -37,7 +32,7 @@ export default async function Home({
     );
   }
 
-  const { q, tags, ingredients, page } = await searchParams;
+  const params = await searchParams;
   const [sections, lists] = await Promise.all([
     getHeartedTagSections(),
     getMyLists(),
@@ -143,13 +138,7 @@ export default async function Home({
             <Plus className="h-4 w-4" /> Create
           </Link>
         </div>
-        <RecipeBrowser
-          basePath="/"
-          search={q ?? ""}
-          tagIds={parseList(tags)}
-          ingredientIds={parseList(ingredients)}
-          page={page ? Number(page) : 1}
-        />
+        <RecipeBrowser basePath="/" {...recipeBrowserProps(params)} />
       </section>
     </div>
   );

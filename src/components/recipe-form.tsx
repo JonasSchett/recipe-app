@@ -19,13 +19,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
+import {
+  EMPTY_INGREDIENT_ROW,
+  IngredientRows,
+  parseIngredientRows,
+  type IngredientRow,
+} from "@/components/ingredient-rows";
 import type { EntitySuggestion } from "@/lib/suggest";
 import { createRecipe, updateRecipe } from "@/lib/actions/recipes";
 import { discardRecipeImage, uploadRecipeImage } from "@/lib/actions/images";
 import { extractTextFromRecipeImage } from "@/lib/actions/ocr";
 import { extractEntitiesFromText } from "@/lib/actions/extract";
-
-type IngredientRow = { name: string; quantity: string; unit: string };
 
 export type RecipeFormInitial = {
   title: string;
@@ -115,15 +119,7 @@ export function RecipeForm({
   const [submitting, setSubmitting] = useState(false);
 
   function addIngredient() {
-    setIngredients((rows) => [...rows, { name: "", quantity: "", unit: "" }]);
-  }
-  function updateIngredient(index: number, patch: Partial<IngredientRow>) {
-    setIngredients((rows) =>
-      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
-    );
-  }
-  function removeIngredient(index: number) {
-    setIngredients((rows) => rows.filter((_, i) => i !== index));
+    setIngredients((rows) => [...rows, EMPTY_INGREDIENT_ROW]);
   }
 
   function addTag(name = tagDraft) {
@@ -282,20 +278,10 @@ export function RecipeForm({
 
     setSubmitting(true);
     try {
-      const parsedIngredients = ingredients
-        .filter((row) => row.name.trim())
-        .map((row) => {
-          const q = row.quantity.trim();
-          return {
-            name: row.name.trim(),
-            quantity: q === "" ? null : Number(q),
-            unit: row.unit.trim() || null,
-          };
-        });
-
-      if (parsedIngredients.some((i) => i.quantity !== null && !(i.quantity! > 0))) {
+      const parsed = parseIngredientRows(ingredients);
+      if (!parsed.ok) {
         setSubmitting(false);
-        return setError("Ingredient quantities must be positive numbers.");
+        return setError(parsed.error);
       }
 
       const input = {
@@ -304,7 +290,7 @@ export function RecipeForm({
         instructions: instructions.trim() || null,
         visibility: isPublic ? ("PUBLIC" as const) : ("PRIVATE" as const),
         imagePaths: images,
-        ingredients: parsedIngredients,
+        ingredients: parsed.ingredients,
         tags,
       };
 
@@ -408,50 +394,11 @@ export function RecipeForm({
           </Button>
         </div>
         <div className="flex flex-col gap-2">
-          {ingredients.map((row, i) => (
-            <div key={i} className="flex gap-2">
-              <Input
-                className="w-20"
-                type="number"
-                step="any"
-                min="0"
-                value={row.quantity}
-                onChange={(e) => updateIngredient(i, { quantity: e.target.value })}
-                placeholder="Qty"
-                aria-label={`Ingredient ${i + 1} quantity`}
-              />
-              <Input
-                className="w-24"
-                value={row.unit}
-                onChange={(e) => updateIngredient(i, { unit: e.target.value })}
-                placeholder="Unit"
-                aria-label={`Ingredient ${i + 1} unit`}
-              />
-              <EntityAutocomplete
-                className="flex-1"
-                value={row.name}
-                onValueChange={(name) => updateIngredient(i, { name })}
-                onPick={(match) => updateIngredient(i, { name: match.label })}
-                vocabulary={vocabulary.ingredients}
-                // Don't re-offer an ingredient another row already uses — the
-                // composite PK forbids the same ingredient twice on a recipe.
-                exclude={ingredients
-                  .filter((_, other) => other !== i)
-                  .map((r) => r.name)}
-                placeholder="Ingredient name"
-                aria-label={`Ingredient ${i + 1} name`}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => removeIngredient(i)}
-                aria-label="Remove ingredient"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+          <IngredientRows
+            rows={ingredients}
+            onRowsChange={setIngredients}
+            vocabulary={vocabulary.ingredients}
+          />
         </div>
         <Button type="button" variant="outline" size="sm" onClick={addIngredient}>
           <Plus className="h-4 w-4" /> Add ingredient

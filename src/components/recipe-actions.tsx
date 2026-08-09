@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import { Globe, Lock, Pencil, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { deleteRecipe, setRecipeVisibility } from "@/lib/actions/recipes";
+import { useAction } from "@/lib/use-action";
 import { cn } from "@/lib/utils";
 
 export function RecipeActions({
@@ -16,35 +16,24 @@ export function RecipeActions({
   visibility: "PRIVATE" | "PUBLIC";
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, run } = useAction();
 
   function toggleVisibility() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await setRecipeVisibility(
+    run(
+      () =>
+        setRecipeVisibility(
           recipeId,
           visibility === "PUBLIC" ? "PRIVATE" : "PUBLIC",
-        );
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update.");
-      }
-    });
+        ),
+      { failure: "Failed to update." },
+    );
   }
 
   function onDelete() {
     if (!confirm("Delete this recipe? This cannot be undone.")) return;
-    setError(null);
-    startTransition(async () => {
-      try {
-        await deleteRecipe(recipeId);
-        router.push("/recipes");
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to delete.");
-      }
+    run(() => deleteRecipe(recipeId), {
+      failure: "Failed to delete.",
+      onSuccess: () => router.push("/recipes"),
     });
   }
 
