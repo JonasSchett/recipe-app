@@ -184,10 +184,16 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   it works over plain http on the LAN. Desktop ignores `capture` and shows a
   picker.
 - The qty/unit/name ingredient editor is **one** component,
-  `components/ingredient-rows.tsx`, used by the recipe form and by the batch
-  bar's "add ingredients" panel. `parseIngredientRows` lives there too, so the
-  rule "a quantity must be a positive number" is stated once rather than in
-  both submit handlers.
+  `IngredientEditor` in `components/ingredient-rows.tsx`, used by the recipe
+  form and by the batch bar's "add ingredients" panel. Shaped like the tag
+  input: an always-open entry row, Enter/Add appends to a compact list, and
+  Edit moves a line back into the entry row (re-adding restores its position).
+  The entry row's draft is **controlled** so submit can include a
+  typed-but-not-added ingredient via `rowsWithDraft` — otherwise "type it, then
+  Save" silently drops it. `parseIngredientRows` lives there too, so the rule
+  "a quantity must be a positive number" is stated once.
+- `BatchActionBar` mounts its contents only while selection mode is on, so
+  Done → Select starts clean (no stale open panel over an empty selection).
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
 - **Notes** (`RecipeNote`) are a notepad, one per (user, recipe) — not a
   comment thread. Anyone who can *view* a recipe may note it, so the guard in

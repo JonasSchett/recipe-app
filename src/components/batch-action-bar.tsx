@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Carrot, CheckSquare, Globe, Pin, Plus, Share2, Tags, Users, X } from "lucide-react";
+import { Carrot, CheckSquare, Globe, Pin, Share2, Tags, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
 import {
   EMPTY_INGREDIENT_ROW,
-  IngredientRows,
+  IngredientEditor,
   parseIngredientRows,
+  rowsWithDraft,
   type IngredientRow,
 } from "@/components/ingredient-rows";
 import { useSelection } from "@/components/recipe-selection";
@@ -44,23 +45,7 @@ export function SelectionToggle() {
   );
 }
 
-/**
- * Sticky bar summarising the current selection and offering the batch actions.
- * Only rendered while selection mode is on.
- *
- * `pageRecipeIds` are the ids currently on screen, which is what "Select page"
- * adds — selecting everything matching the filter across pages would mean
- * sending the filter to the server instead of ids, which is not needed yet.
- */
-export function BatchActionBar({
-  pageRecipeIds,
-  tagVocabulary = [],
-  ingredientVocabulary = [],
-  pinnableLists = [],
-  groups = [],
-  filter,
-  totalMatching,
-}: {
+type BatchActionBarProps = {
   pageRecipeIds: string[];
   tagVocabulary?: EntitySuggestion[];
   ingredientVocabulary?: EntitySuggestion[];
@@ -71,18 +56,47 @@ export function BatchActionBar({
   filter: { search: string; tagIds: string[]; ingredientIds: string[] };
   /** How many recipes match it in total, across every page. */
   totalMatching: number;
-}) {
-  const { active, selected, selectMany, clear, setActive } = useSelection();
+};
+
+/**
+ * Sticky bar summarising the current selection and offering the batch actions.
+ *
+ * The bar itself is mounted only while selection mode is on, so leaving it
+ * throws away everything the bar was holding — an open panel, half-typed tags,
+ * the last result message — just as leaving drops the selection. Keeping that
+ * state across a Done/Select round trip reopened a panel over an empty
+ * selection.
+ */
+export function BatchActionBar(props: BatchActionBarProps) {
+  const { active } = useSelection();
+  return active ? <ActiveBatchBar {...props} /> : null;
+}
+
+/**
+ * The bar's contents. `pageRecipeIds` are the ids currently on screen, which is what "Select page"
+ * adds — selecting everything matching the filter across pages would mean
+ * sending the filter to the server instead of ids, which is not needed yet.
+ */
+function ActiveBatchBar({
+  pageRecipeIds,
+  tagVocabulary = [],
+  ingredientVocabulary = [],
+  pinnableLists = [],
+  groups = [],
+  filter,
+  totalMatching,
+}: BatchActionBarProps) {
+  const { selected, selectMany, clear, setActive } = useSelection();
   const [panel, setPanel] = useState<
     null | "tags" | "ingredients" | "lists" | "share"
   >(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
-  const [rows, setRows] = useState<IngredientRow[]>([EMPTY_INGREDIENT_ROW]);
+  const [rows, setRows] = useState<IngredientRow[]>([]);
+  const [ingredientDraft, setIngredientDraft] =
+    useState<IngredientRow>(EMPTY_INGREDIENT_ROW);
   const [message, setMessage] = useState<string | null>(null);
   const { pending, error, setError, run } = useAction();
-
-  if (!active) return null;
 
   const count = selected.size;
   const allOnPageSelected = pageRecipeIds.every((id) => selected.has(id));
@@ -99,7 +113,8 @@ export function BatchActionBar({
     setPanel(null);
     setTags([]);
     setTagDraft("");
-    setRows([EMPTY_INGREDIENT_ROW]);
+    setRows([]);
+    setIngredientDraft(EMPTY_INGREDIENT_ROW);
     setError(null);
   }
 
@@ -129,10 +144,10 @@ export function BatchActionBar({
     );
   }
 
-  const filledRows = rows.filter((row) => row.name.trim());
+  const ingredientsToAdd = rowsWithDraft(rows, ingredientDraft);
 
   function applyIngredients() {
-    const parsed = parseIngredientRows(rows);
+    const parsed = parseIngredientRows(ingredientsToAdd);
     if (!parsed.ok) {
       setError(parsed.error);
       return;
@@ -284,26 +299,16 @@ export function BatchActionBar({
 
         {panel === "ingredients" && (
           <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-2 border-b pb-3">
-            <div className="flex max-h-52 flex-col gap-2 overflow-y-auto">
-              <IngredientRows
+            <div className="max-h-64 overflow-y-auto">
+              <IngredientEditor
                 rows={rows}
                 onRowsChange={setRows}
+                draft={ingredientDraft}
+                onDraftChange={setIngredientDraft}
                 vocabulary={ingredientVocabulary}
                 labelPrefix="Batch ingredient"
-                keepOneRow
               />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              onClick={() =>
-                setRows((prev) => [...prev, EMPTY_INGREDIENT_ROW])
-              }
-            >
-              <Plus className="h-4 w-4" /> Add row
-            </Button>
             <p className="text-xs text-muted-foreground">
               Recipes that already list an ingredient keep their own quantity —
               this only adds missing lines.
@@ -313,7 +318,7 @@ export function BatchActionBar({
                 type="button"
                 size="sm"
                 onClick={applyIngredients}
-                disabled={pending || filledRows.length === 0 || count === 0}
+                disabled={pending || ingredientsToAdd.length === 0 || count === 0}
               >
                 {pending
                   ? "Applying…"
@@ -514,7 +519,11 @@ export function BatchActionBar({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={clear}
+              onClick={() => {
+                // A panel over an empty selection has nothing to apply to.
+                clear();
+                closePanel();
+              }}
               disabled={count === 0}
             >
               Clear

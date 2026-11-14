@@ -25,8 +25,9 @@ import {
 } from "@/components/group-share-picker";
 import {
   EMPTY_INGREDIENT_ROW,
-  IngredientRows,
+  IngredientEditor,
   parseIngredientRows,
+  rowsWithDraft,
   type IngredientRow,
 } from "@/components/ingredient-rows";
 import type { EntitySuggestion } from "@/lib/suggest";
@@ -124,6 +125,9 @@ export function RecipeForm({
       unit: i.unit ?? "",
     })),
   );
+  // What's typed in the ingredient entry row but not added yet.
+  const [ingredientDraft, setIngredientDraft] =
+    useState<IngredientRow>(EMPTY_INGREDIENT_ROW);
   const [tags, setTags] = useState<string[]>(start.tags);
   const [tagDraft, setTagDraft] = useState("");
 
@@ -142,10 +146,6 @@ export function RecipeForm({
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  function addIngredient() {
-    setIngredients((rows) => [...rows, EMPTY_INGREDIENT_ROW]);
-  }
 
   function addTag(name = tagDraft) {
     const value = name.trim();
@@ -303,7 +303,9 @@ export function RecipeForm({
 
     setSubmitting(true);
     try {
-      const parsed = parseIngredientRows(ingredients);
+      const parsed = parseIngredientRows(
+        rowsWithDraft(ingredients, ingredientDraft),
+      );
       if (!parsed.ok) {
         setSubmitting(false);
         return setError(parsed.error);
@@ -419,16 +421,13 @@ export function RecipeForm({
             {detectBusy ? "Detecting…" : "Detect from text"}
           </Button>
         </div>
-        <div className="flex flex-col gap-2">
-          <IngredientRows
-            rows={ingredients}
-            onRowsChange={setIngredients}
-            vocabulary={vocabulary.ingredients}
-          />
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={addIngredient}>
-          <Plus className="h-4 w-4" /> Add ingredient
-        </Button>
+        <IngredientEditor
+          rows={ingredients}
+          onRowsChange={setIngredients}
+          draft={ingredientDraft}
+          onDraftChange={setIngredientDraft}
+          vocabulary={vocabulary.ingredients}
+        />
       </div>
 
       {/* Tags */}

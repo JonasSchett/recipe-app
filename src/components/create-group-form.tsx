@@ -33,7 +33,7 @@ export function CreateGroupForm() {
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="The Müllers"
+          placeholder="Group Name"
           aria-label="New group name"
           maxLength={80}
         />
