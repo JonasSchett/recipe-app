@@ -10,6 +10,7 @@ import {
   getAllTags,
   getEntityVocabulary,
   getListsForPinning,
+  getMyGroups,
   getRecipes,
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -56,13 +57,14 @@ export async function RecipeBrowser({
   ingredientIds?: string[];
   page?: number;
 }) {
-  const [result, allTags, allIngredients, vocabulary, pinnableLists] =
+  const [result, allTags, allIngredients, vocabulary, pinnableLists, groups] =
     await Promise.all([
       getRecipes({ search, tagIds, ingredientIds, page }),
       getAllTags(),
       getAllIngredients(),
       getEntityVocabulary(),
       getListsForPinning(),
+      getMyGroups(),
     ]);
   const { items, total, page: current, pageCount } = result;
 
@@ -161,6 +163,7 @@ export async function RecipeBrowser({
           tagVocabulary={vocabulary.tags}
           ingredientVocabulary={vocabulary.ingredients}
           pinnableLists={pinnableLists}
+          groups={groups.map(({ id, name }) => ({ id, name }))}
           filter={{ search, tagIds, ingredientIds }}
           totalMatching={total}
         />

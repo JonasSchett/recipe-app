@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { consumePendingListInvites } from "@/lib/list-invites";
+import { consumePendingGroupInvites } from "@/lib/group-invites";
 import { startSession } from "@/lib/session-cookie";
 
 /**
@@ -25,10 +26,11 @@ export async function devSignIn(formData: FormData) {
     create: { email, name: email.split("@")[0], role },
   });
 
-  // The real sign-in settles pending list invites in the NextAuth `signIn`
+  // The real sign-in settles pending list and group invites in the NextAuth `signIn`
   // event, which this path never reaches — do the same here so dev behaves
   // like production.
   await consumePendingListInvites(user.id, user.email);
+  await consumePendingGroupInvites(user.id, user.email);
 
   // Same helper the password sign-in uses, so both paths agree on the cookie
   // name — which differs between http and https.

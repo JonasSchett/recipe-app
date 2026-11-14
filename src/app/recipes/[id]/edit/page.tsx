@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { RecipeForm } from "@/components/recipe-form";
 import { isAdmin, requirePageUser } from "@/lib/auth-guards";
-import { getEntityVocabulary, getRecipeById } from "@/lib/queries";
+import { getEntityVocabulary, getMyGroups, getRecipeById } from "@/lib/queries";
 
 export default async function EditRecipePage({
   params,
@@ -17,7 +17,11 @@ export default async function EditRecipePage({
   // Only the author or an admin may edit.
   if (!isAdmin(user) && recipe.authorId !== user.id) redirect(`/recipes/${id}`);
 
-  const vocabulary = await getEntityVocabulary();
+  const isAuthor = recipe.authorId === user.id;
+  const [vocabulary, groups] = await Promise.all([
+    getEntityVocabulary(),
+    isAuthor ? getMyGroups() : Promise.resolve([]),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
@@ -26,6 +30,8 @@ export default async function EditRecipePage({
         mode="edit"
         recipeId={recipe.id}
         vocabulary={vocabulary}
+        groups={groups}
+        canShareWithGroups={isAuthor}
         initial={{
           title: recipe.title,
           description: recipe.description ?? "",
@@ -40,6 +46,7 @@ export default async function EditRecipePage({
             }),
           ),
           tags: recipe.tags.map(({ tag, displayName }) => displayName ?? tag.name),
+          groupIds: recipe.groupShares.map(({ group }) => group.id),
         }}
       />
     </div>

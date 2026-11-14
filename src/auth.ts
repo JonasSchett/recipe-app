@@ -3,6 +3,7 @@ import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import { consumePendingListInvites } from "@/lib/list-invites";
+import { consumePendingGroupInvites } from "@/lib/group-invites";
 import { isGoogleEmailAllowed, parseEmailList } from "@/lib/allowed-emails";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -50,9 +51,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           data: { role: "ADMIN" },
         });
       }
-      // Settle any list shares sent to this address before they had an
+      // Settle any list shares and group invites sent to this address before they had an
       // account. Same hook, same guarantee: the user row exists by now.
-      if (user.id) await consumePendingListInvites(user.id, user.email);
+      if (user.id) {
+        await consumePendingListInvites(user.id, user.email);
+        await consumePendingGroupInvites(user.id, user.email);
+      }
     },
   },
 });

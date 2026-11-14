@@ -1,13 +1,14 @@
 import { RecipeForm } from "@/components/recipe-form";
 import { requirePageUser } from "@/lib/auth-guards";
-import { getEntityVocabulary, getUserSettings } from "@/lib/queries";
+import { getEntityVocabulary, getMyGroups, getUserSettings } from "@/lib/queries";
 
 export default async function NewRecipePage() {
   const user = await requirePageUser();
 
-  const [vocabulary, settings] = await Promise.all([
+  const [vocabulary, settings, groups] = await Promise.all([
     getEntityVocabulary(),
     getUserSettings(),
+    getMyGroups(),
   ]);
 
   return (
@@ -18,6 +19,10 @@ export default async function NewRecipePage() {
         vocabulary={vocabulary}
         // Pre-fill only — `createRecipe` still receives an explicit visibility.
         defaultVisibility={settings.defaultRecipeVisibility}
+        groups={groups}
+        defaultGroupIds={groups
+          .filter((group) => group.shareRecipesByDefault)
+          .map((group) => group.id)}
       />
     </div>
   );

@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth-guards";
 import { visibilityWhere } from "@/lib/queries";
-import { recipeNoteSchema } from "@/lib/validations";
+import { assertMemberOfGroups } from "@/lib/group-access";
+import {
+  noteSharingSchema,
+  recipeNoteSchema,
+  type NoteSharingInput,
+} from "@/lib/validations";
 
 /**
  * Throws unless the current user may *view* `recipeId`.
@@ -26,21 +31,42 @@ async function assertCanViewRecipe(
 }
 
 /**
- * Create or replace the current user's note on a recipe. An empty body deletes
- * it, so "clear the text and save" is the same gesture as removing the note.
+ * Create or replace the current user's note on a recipe, along with who it's
+ * shared with. An empty body deletes it (and its shares, which cascade), so
+ * "clear the text and save" is the same gesture as removing the note.
+ *
+ * `sharing` is restated in full on every save and defaults to private when
+ * omitted. Group shares are limited to groups the caller belongs to; nobody
+ * can see the note who can't already see the recipe (see `getSharedNotes`).
  */
-export async function saveRecipeNote(recipeId: string, body: string) {
+export async function saveRecipeNote(
+  recipeId: string,
+  body: string,
+  sharing: NoteSharingInput = {},
+) {
   const user = await requireUser();
   const parsed = recipeNoteSchema.parse(body);
+  const { visibility, groupIds } = noteSharingSchema.parse(sharing);
   await assertCanViewRecipe(user, recipeId);
 
   if (!parsed) {
     await prisma.recipeNote.deleteMany({ where: { recipeId, userId: user.id } });
   } else {
-    await prisma.recipeNote.upsert({
-      where: { recipeId_userId: { recipeId, userId: user.id } },
-      create: { recipeId, userId: user.id, body: parsed },
-      update: { body: parsed },
+    await prisma.$transaction(async (tx) => {
+      await assertMemberOfGroups(tx, user.id, groupIds);
+      await tx.recipeNote.upsert({
+        where: { recipeId_userId: { recipeId, userId: user.id } },
+        create: { recipeId, userId: user.id, body: parsed, visibility },
+        update: { body: parsed, visibility },
+      });
+      await tx.recipeNoteGroupShare.deleteMany({
+        where: { recipeId, userId: user.id },
+      });
+      if (groupIds.length > 0) {
+        await tx.recipeNoteGroupShare.createMany({
+          data: groupIds.map((groupId) => ({ recipeId, userId: user.id, groupId })),
+        });
+      }
     });
   }
 

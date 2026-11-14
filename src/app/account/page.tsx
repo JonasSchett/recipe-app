@@ -9,15 +9,24 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UserSettingsForm } from "@/components/user-settings-form";
+import { ShareExistingPanel } from "@/components/share-existing-panel";
 import { requirePageUser } from "@/lib/auth-guards";
-import { getUserSettings } from "@/lib/queries";
+import {
+  getMyGroups,
+  getShareExistingCounts,
+  getUserSettings,
+} from "@/lib/queries";
 import { signOutAction } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 
 export default async function AccountPage() {
   const user = await requirePageUser();
 
-  const settings = await getUserSettings();
+  const [settings, groups, existing] = await Promise.all([
+    getUserSettings(),
+    getMyGroups(),
+    getShareExistingCounts(),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-6">
@@ -64,15 +73,19 @@ export default async function AccountPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Settings</CardTitle>
-          <CardDescription>Preferences that apply to your account.</CardDescription>
+          <CardTitle>Sharing defaults</CardTitle>
+          <CardDescription>Who your new recipes and notes are shared with.</CardDescription>
         </CardHeader>
         <CardContent>
           <UserSettingsForm
             defaultRecipeVisibility={settings.defaultRecipeVisibility}
+            defaultNoteVisibility={settings.defaultNoteVisibility}
+            groups={groups}
           />
         </CardContent>
       </Card>
+
+      <ShareExistingPanel everyone={existing.everyone} groups={existing.groups} />
     </div>
   );
 }

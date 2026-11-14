@@ -20,6 +20,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EntityAutocomplete } from "@/components/entity-autocomplete";
 import {
+  GroupSharePicker,
+  type PickableGroup,
+} from "@/components/group-share-picker";
+import {
   EMPTY_INGREDIENT_ROW,
   IngredientRows,
   parseIngredientRows,
@@ -39,6 +43,8 @@ export type RecipeFormInitial = {
   imagePaths: string[];
   ingredients: { name: string; quantity: number | null; unit: string | null }[];
   tags: string[];
+  /** Groups it's currently shared with (only the viewer's own groups). */
+  groupIds: string[];
 };
 
 const EMPTY: RecipeFormInitial = {
@@ -49,6 +55,7 @@ const EMPTY: RecipeFormInitial = {
   imagePaths: [],
   ingredients: [],
   tags: [],
+  groupIds: [],
 };
 
 /** Tidy a raw text selection into a candidate ingredient/tag name. */
@@ -73,6 +80,9 @@ export function RecipeForm({
   initial,
   vocabulary = NO_VOCABULARY,
   defaultVisibility = "PRIVATE",
+  groups = [],
+  defaultGroupIds = [],
+  canShareWithGroups = true,
 }: {
   mode: "create" | "edit";
   recipeId?: string;
@@ -84,14 +94,29 @@ export function RecipeForm({
    * own visibility always wins, so editing can never silently republish it.
    */
   defaultVisibility?: "PRIVATE" | "PUBLIC";
+  /** Family groups the current user belongs to. */
+  groups?: PickableGroup[];
+  /** Groups pre-ticked on a blank form, from the per-group account defaults. */
+  defaultGroupIds?: string[];
+  /**
+   * False when someone other than the author (an admin) edits the recipe:
+   * group sharing is the author's call, so the picker is hidden and the save
+   * leaves the existing shares alone.
+   */
+  canShareWithGroups?: boolean;
 }) {
   const router = useRouter();
-  const start = initial ?? { ...EMPTY, visibility: defaultVisibility };
+  const start = initial ?? {
+    ...EMPTY,
+    visibility: defaultVisibility,
+    groupIds: defaultGroupIds,
+  };
 
   const [title, setTitle] = useState(start.title);
   const [description, setDescription] = useState(start.description);
   const [instructions, setInstructions] = useState(start.instructions);
   const [isPublic, setIsPublic] = useState(start.visibility === "PUBLIC");
+  const [groupIds, setGroupIds] = useState<string[]>(start.groupIds);
   const [ingredients, setIngredients] = useState<IngredientRow[]>(
     start.ingredients.map((i) => ({
       name: i.name,
@@ -292,6 +317,7 @@ export function RecipeForm({
         imagePaths: images,
         ingredients: parsed.ingredients,
         tags,
+        ...(canShareWithGroups ? { groupIds } : {}),
       };
 
       const result =
@@ -570,15 +596,25 @@ export function RecipeForm({
       </div>
 
       {/* Visibility */}
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={isPublic}
-          onChange={(e) => setIsPublic(e.target.checked)}
-          className="h-4 w-4"
-        />
-        Make this recipe public (visible to everyone)
-      </label>
+      <div className="flex flex-col gap-3 rounded-md border p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Make this recipe public (visible to everyone)
+        </label>
+        {canShareWithGroups && (
+          <GroupSharePicker
+            groups={groups}
+            selected={groupIds}
+            onChange={setGroupIds}
+            label="Share with family groups"
+          />
+        )}
+      </div>
 
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting || imageBusy}>

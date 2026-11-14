@@ -46,6 +46,8 @@ model User {
   ownedLists    RecipeList[]
   listMemberships RecipeListMember[]
   allowedEmails AllowedEmail[]
+  ownedGroups      FamilyGroup[]
+  groupMemberships FamilyGroupMember[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -75,6 +77,11 @@ model User {
   /// — the schema default below and the Zod default both stay PRIVATE, so a
   /// payload that omits visibility can never publish by accident.
   defaultRecipeVisibility Visibility @default(PRIVATE)
+  /// Pre-selects "share with everyone who can see the recipe" when starting a
+  /// new note. Like the recipe default, a form default only: a saved note
+  /// keeps whatever it was saved with.
+  defaultNoteVisibility   Visibility @default(PRIVATE)
+  // Per-group defaults live on FamilyGroupMember, one row per group.
 }
 
 /// An email address allowed to sign in with Google, managed from the admin page.
@@ -154,6 +161,7 @@ model Recipe {
   tags        RecipeTag[]
   notes       RecipeNote[]
   listItems   RecipeListItem[]
+  groupShares RecipeGroupShare[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -251,19 +259,26 @@ model RecipeTag {
   @@index([tagId])
 }
 
-// A private notepad, one per (user, recipe) — not a comment thread. Anyone who
-// can *view* a recipe may note it, including on someone else's recipe ("halve
-// the sugar", "cooked 2026-08-01, needed 10 min longer"). A note is only ever
-// readable by its author: no query exposes another user's notes.
+// A notepad, one per (user, recipe) — not a comment thread. Anyone who can
+// *view* a recipe may note it, including on someone else's recipe ("halve the
+// sugar", "cooked 2026-08-01, needed 10 min longer").
+//
+// Private by default. Its author may share it with everyone who can see the
+// recipe (`visibility: PUBLIC`) and/or with family groups they belong to
+// (`groupShares`). Either way a shared note is only ever shown alongside the
+// recipe, so it can't reach anyone who can't already see that recipe; see
+// `getSharedNotes`.
 model RecipeNote {
-  recipeId  String
-  userId    String
-  body      String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  recipeId   String
+  userId     String
+  body       String     @db.Text
+  visibility Visibility @default(PRIVATE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
-  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe      Recipe                 @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupShares RecipeNoteGroupShare[]
 
   @@id([recipeId, userId])
   @@index([userId])
@@ -350,4 +365,98 @@ model UserHeartedTag {
 
   @@id([userId, tagId])
   @@index([tagId])
+}
+
+// ---------------------------------------------------------------------------
+// Family groups — a standing circle of people (a household, the grandparents)
+// that recipes and notes can be shared with, without making them PUBLIC.
+// Authorization lives in `lib/group-access.ts`.
+// ---------------------------------------------------------------------------
+
+model FamilyGroup {
+  id   String @id @default(cuid())
+  name String
+
+  /// Manages the group (rename, invite, remove, delete). The owner also has a
+  /// FamilyGroupMember row like everyone else, so "is a member" is one check
+  /// and the owner has per-group sharing defaults too.
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  /// Secret join link. Null = off; rotating it revokes old links.
+  shareToken String? @unique
+
+  members      FamilyGroupMember[]
+  invites      FamilyGroupInvite[]
+  recipeShares RecipeGroupShare[]
+  noteShares   RecipeNoteGroupShare[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model FamilyGroupMember {
+  groupId  String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  // --- This member's sharing defaults for this group (edited on /account) ---
+  // Form defaults, like User.defaultRecipeVisibility: they pre-tick the group
+  // when creating a recipe or starting a note, and never touch saved items.
+
+  shareRecipesByDefault Boolean @default(false)
+  shareNotesByDefault   Boolean @default(false)
+
+  group FamilyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+/// An email invite for someone with no account yet; consumed into a member row
+/// on their first sign-in (see `lib/group-invites.ts`).
+model FamilyGroupInvite {
+  id          String   @id @default(cuid())
+  groupId     String
+  /// Stored lowercased; matched case-insensitively against User.email.
+  email       String
+  invitedById String
+  createdAt   DateTime @default(now())
+
+  group FamilyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, email])
+  @@index([email])
+}
+
+/// A recipe shared read-only with a group. Only the recipe's author creates
+/// these, and only for groups they belong to; leaving a group removes them.
+/// Grants READ via `visibilityWhere`, never write.
+model RecipeGroupShare {
+  recipeId String
+  groupId  String
+  sharedAt DateTime @default(now())
+
+  recipe Recipe      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  group  FamilyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, groupId])
+  @@index([groupId])
+}
+
+/// A note shared with a group. Only the note's author creates these, only for
+/// groups they belong to; leaving a group removes them.
+model RecipeNoteGroupShare {
+  recipeId String
+  userId   String
+  groupId  String
+
+  note  RecipeNote  @relation(fields: [recipeId, userId], references: [recipeId, userId], onDelete: Cascade)
+  group FamilyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, userId, groupId])
+  @@index([groupId])
 }

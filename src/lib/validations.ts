@@ -12,6 +12,12 @@ export type IngredientInput = z.infer<typeof ingredientInputSchema>;
 
 export const visibilitySchema = z.enum(["PRIVATE", "PUBLIC"]);
 
+/** Groups something is shared with. Deduplicated; membership is checked by the action. */
+export const groupIdsSchema = z
+  .array(z.string().min(1))
+  .max(50)
+  .transform((ids) => [...new Set(ids)]);
+
 export const roleSchema = z.enum(["ADMIN", "USER"]);
 
 /** Payload for creating or editing a recipe. */
@@ -26,6 +32,9 @@ export const recipeInputSchema = z.object({
   imagePaths: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
   ingredients: z.array(ingredientInputSchema).max(100).default([]),
   tags: z.array(z.string().trim().min(1).max(50)).max(50).default([]),
+  // Family groups to share with. Omitted = leave the recipe's group shares as
+  // they are (an admin editing someone else's recipe never touches them).
+  groupIds: groupIdsSchema.optional(),
 });
 
 export type RecipeInput = z.infer<typeof recipeInputSchema>;
@@ -46,11 +55,23 @@ export type RecipeFilter = z.infer<typeof recipeFilterSchema>;
 export const recipeNoteSchema = z.string().trim().max(5000);
 
 /**
+ * Who a note is shared with. Defaults to private, so a caller that omits it
+ * can never share by accident.
+ */
+export const noteSharingSchema = z.object({
+  visibility: visibilitySchema.default("PRIVATE"),
+  groupIds: groupIdsSchema.default([]),
+});
+
+export type NoteSharingInput = z.input<typeof noteSharingSchema>;
+
+/**
  * Per-user settings editable on /account. Every field is optional so a caller
  * can update one setting without restating the others.
  */
 export const userSettingsSchema = z.object({
   defaultRecipeVisibility: visibilitySchema.optional(),
+  defaultNoteVisibility: visibilitySchema.optional(),
 });
 
 export type UserSettingsInput = z.infer<typeof userSettingsSchema>;
@@ -115,6 +136,40 @@ export const listInviteEmailSchema = z
   .email("Enter a valid email address")
   .max(200);
 
+// --- Family groups ---------------------------------------------------------
+
+export const groupNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Group name is required")
+  .max(80);
+
+/** One member's sharing defaults for one group. Omitted fields stay as they are. */
+export const groupDefaultsSchema = z.object({
+  shareRecipesByDefault: z.boolean().optional(),
+  shareNotesByDefault: z.boolean().optional(),
+});
+
+export type GroupDefaultsInput = z.infer<typeof groupDefaultsSchema>;
+
+/**
+ * Share *everything already saved* of one kind with one audience — the
+ * catch-up for "I forgot to tick it" — or, for a group, stop sharing it all.
+ * `groupId: null` means everyone, which has no bulk "stop": making every item
+ * private would also revert the ones made public on purpose.
+ */
+export const shareExistingSchema = z
+  .object({
+    kind: z.enum(["recipes", "notes"]),
+    groupId: z.string().min(1).nullable(),
+    share: z.boolean().default(true),
+  })
+  .refine((v) => v.share || v.groupId !== null, {
+    message: "Stopping sharing in bulk is only possible for a group.",
+  });
+
+export type ShareExistingInput = z.input<typeof shareExistingSchema>;
+
 // --- Batch operations (declared last: they build on the schemas above) -------
 
 /**
@@ -148,3 +203,15 @@ export const batchIngredientsSchema = z.object({
 });
 
 export type BatchIngredientsInput = z.infer<typeof batchIngredientsSchema>;
+
+/**
+ * Share or unshare many recipes at once: with everyone (`groupId: null`, i.e.
+ * PUBLIC vs PRIVATE) or with one group.
+ */
+export const batchShareSchema = z.object({
+  recipeIds: batchRecipeIdsSchema,
+  groupId: z.string().min(1).nullable(),
+  share: z.boolean(),
+});
+
+export type BatchShareInput = z.infer<typeof batchShareSchema>;

@@ -20,17 +20,21 @@ import { envAllowedEmails } from "@/lib/allowed-emails";
 import { withDictionary, type EntitySuggestion } from "@/lib/suggest";
 import { searchRecipeIds } from "@/lib/recipe-search";
 import { getListPermission, listAccessWhere } from "@/lib/list-access";
+import { getGroupPermission, groupMemberWhere } from "@/lib/group-access";
 
 /**
  * Prisma `where` fragment restricting recipes to those a user may view:
- * admins see everything; everyone else sees PUBLIC recipes, their own, and
- * anything pinned to a list they own or belong to.
+ * admins see everything; everyone else sees PUBLIC recipes, their own,
+ * anything pinned to a list they own or belong to, and anything shared with a
+ * family group they're in.
  *
  * That third branch is what makes a shared meal plan work: pinning a private
  * recipe to a list you share lets its members **read** it. It grants read
  * only — `assertCanModifyRecipe` is untouched, so a member still cannot edit
  * or delete a recipe that isn't theirs — and it is scoped to lists the viewer
  * is actually on, so it never widens access beyond people the owner invited.
+ * The fourth branch, family groups, follows the same rules: read only, and only
+ * for groups the viewer is a member of.
  *
  * Everything that reads recipes funnels through here, so this one fragment is
  * the whole of the grant.
@@ -53,17 +57,21 @@ export function visibilityWhere(user: SessionUser): Prisma.RecipeWhereInput {
           },
         },
       },
+      { groupShares: { some: { group: groupMemberWhere(user) } } },
     ],
   };
 }
 
 /**
- * Include shape returning a recipe with its author, ingredients, tags — and the
- * viewer's own note, if any.
+ * Include shape returning a recipe with its author, ingredients, tags — the
+ * viewer's own note, if any — and which of the viewer's groups it's shared with.
  *
  * Takes the viewer's id because notes are private: the `where` here is the only
  * thing that keeps one user's notes out of another's payload, so every caller
- * must pass the *current* user's id and never a recipe author's.
+ * must pass the *current* user's id and never a recipe author's. Notes others
+ * have *shared* come from `getSharedNotes`, never from here. Likewise
+ * `groupShares` is scoped to the viewer's groups, so the names of groups they
+ * aren't in never leave the server.
  */
 function recipeDetailInclude(userId: string) {
   return {
@@ -71,7 +79,15 @@ function recipeDetailInclude(userId: string) {
     images: { orderBy: { position: "asc" } },
     ingredients: { include: { ingredient: true } },
     tags: { include: { tag: true } },
-    notes: { where: { userId }, take: 1 },
+    notes: {
+      where: { userId },
+      take: 1,
+      include: { groupShares: { select: { groupId: true } } },
+    },
+    groupShares: {
+      where: { group: { members: { some: { userId } } } },
+      select: { group: { select: { id: true, name: true } } },
+    },
   } satisfies Prisma.RecipeInclude;
 }
 
@@ -424,12 +440,190 @@ export async function getUserSettings() {
     where: { id: user.id },
     select: {
       defaultRecipeVisibility: true,
+      defaultNoteVisibility: true,
       username: true,
       passwordHash: true,
     },
   });
   return { ...settings, hasPassword: passwordHash !== null };
 }
+
+// --- Family groups -----------------------------------------------------------
+
+/**
+ * Every group the current user is in, with *their own* per-group sharing
+ * defaults — the shape the sharing pickers and the /account settings need.
+ */
+export async function getMyGroups() {
+  const user = await requireUser();
+  const memberships = await prisma.familyGroupMember.findMany({
+    where: { userId: user.id },
+    orderBy: { group: { name: "asc" } },
+    select: {
+      shareRecipesByDefault: true,
+      shareNotesByDefault: true,
+      group: {
+        select: {
+          id: true,
+          name: true,
+          ownerId: true,
+          owner: { select: { name: true, email: true, username: true } },
+          _count: { select: { members: true, recipeShares: true } },
+        },
+      },
+    },
+  });
+  return memberships.map(({ group, ...defaults }) => ({
+    ...group,
+    ...defaults,
+    isOwner: group.ownerId === user.id,
+  }));
+}
+
+export type MyGroup = Awaited<ReturnType<typeof getMyGroups>>[number];
+
+/**
+ * For the "share existing items" panel: how many of the current user's own
+ * recipes and notes are *not yet* shared with each audience, and (per group)
+ * how many already are — i.e. exactly what each button would change. Own
+ * items only, admins included.
+ */
+export async function getShareExistingCounts() {
+  const user = await requireUser();
+  const memberships = await prisma.familyGroupMember.findMany({
+    where: { userId: user.id },
+    orderBy: { group: { name: "asc" } },
+    select: { group: { select: { id: true, name: true } } },
+  });
+
+  const [privateRecipes, privateNotes, perGroup] = await Promise.all([
+    prisma.recipe.count({ where: { authorId: user.id, visibility: "PRIVATE" } }),
+    prisma.recipeNote.count({ where: { userId: user.id, visibility: "PRIVATE" } }),
+    Promise.all(
+      memberships.map(async ({ group }) => ({
+        ...group,
+        recipes: await prisma.recipe.count({
+          where: { authorId: user.id, groupShares: { none: { groupId: group.id } } },
+        }),
+        notes: await prisma.recipeNote.count({
+          where: { userId: user.id, groupShares: { none: { groupId: group.id } } },
+        }),
+        // Already shared — what "stop sharing" would change.
+        sharedRecipes: await prisma.recipeGroupShare.count({
+          where: { groupId: group.id, recipe: { authorId: user.id } },
+        }),
+        sharedNotes: await prisma.recipeNoteGroupShare.count({
+          where: { groupId: group.id, userId: user.id },
+        }),
+      })),
+    ),
+  ]);
+
+  return { everyone: { recipes: privateRecipes, notes: privateNotes }, groups: perGroup };
+}
+
+/**
+ * One group with its members, pending invites (owner only) and the recipes
+ * shared with it, or `null` when it doesn't exist *or* the viewer isn't in it.
+ */
+export async function getGroupById(id: string) {
+  const user = await requireUser();
+  const permission = await getGroupPermission(user, id);
+  if (!permission) return null;
+
+  const group = await prisma.familyGroup.findUniqueOrThrow({
+    where: { id },
+    include: {
+      members: {
+        orderBy: { joinedAt: "asc" },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, username: true, image: true },
+          },
+        },
+      },
+      invites: { orderBy: { createdAt: "asc" } },
+      recipeShares: {
+        orderBy: { sharedAt: "desc" },
+        // Shared with the group means visible to every member, so this needs
+        // no further filtering — but it goes through the shared include so the
+        // cards look like they do everywhere else.
+        include: { recipe: { include: recipeDetailInclude(user.id) } },
+      },
+    },
+  });
+
+  // The join link is a credential and pending invites name people who haven't
+  // joined — both are the owner's business, so members get neither.
+  const { shareToken, invites, ...rest } = group;
+  const isOwner = permission === "OWNER";
+  return {
+    group: rest,
+    permission,
+    shareToken: isOwner ? shareToken : null,
+    invites: isOwner ? invites : [],
+  };
+}
+
+/**
+ * A group by its join token, for the join page. No access check: holding the
+ * token *is* the credential. Exposes only the name, owner and size.
+ */
+export async function getGroupByShareToken(token: string) {
+  if (!token) return null;
+  return prisma.familyGroup.findUnique({
+    where: { shareToken: token },
+    select: {
+      id: true,
+      name: true,
+      owner: { select: { name: true, email: true, username: true } },
+      _count: { select: { members: true } },
+    },
+  });
+}
+
+/**
+ * Notes *other people* have shared on a recipe the viewer can see: those
+ * shared with everyone, and those shared with a group the viewer is in.
+ *
+ * The recipe visibility check comes first and is the whole reason a PUBLIC
+ * note on a private recipe stays contained — a note is never readable by
+ * anyone who couldn't open the recipe it's written on. No admin bypass: an
+ * admin sees others' notes only when they were shared with them too.
+ */
+export async function getSharedNotes(recipeId: string) {
+  const user = await requireUser();
+  const visible = await prisma.recipe.findFirst({
+    where: { AND: [{ id: recipeId }, visibilityWhere(user)] },
+    select: { id: true },
+  });
+  if (!visible) return [];
+
+  return prisma.recipeNote.findMany({
+    where: {
+      recipeId,
+      userId: { not: user.id },
+      OR: [
+        { visibility: "PUBLIC" },
+        { groupShares: { some: { group: groupMemberWhere(user) } } },
+      ],
+    },
+    orderBy: { updatedAt: "desc" },
+    select: {
+      body: true,
+      visibility: true,
+      updatedAt: true,
+      user: { select: { id: true, name: true, email: true, username: true, image: true } },
+      // Only name the groups the viewer shares with the author.
+      groupShares: {
+        where: { group: groupMemberWhere(user) },
+        select: { group: { select: { id: true, name: true } } },
+      },
+    },
+  });
+}
+
+export type SharedNote = Awaited<ReturnType<typeof getSharedNotes>>[number];
 
 /**
  * All users with their role and recipe count, for the admin console.

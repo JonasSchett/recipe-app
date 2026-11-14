@@ -14,6 +14,22 @@ import {
   resolveTags,
 } from "@/lib/actions/_shared";
 import { deleteRecipeImage } from "@/lib/storage";
+import { setRecipeGroupShares } from "@/lib/group-access";
+
+/**
+ * Sharing a recipe with a family group is the author's call — the groups are
+ * *their* circles. An admin may edit anyone's recipe but never shares it into
+ * their own family on the author's behalf; the form omits `groupIds` for them.
+ */
+function assertCanShareWithGroups(
+  user: { id: string },
+  authorId: string,
+  groupIds: string[] | undefined,
+): void {
+  if (groupIds !== undefined && authorId !== user.id) {
+    throw new Error("Only the recipe's author can share it with groups.");
+  }
+}
 
 /** Create a recipe owned by the current user. */
 export async function createRecipe(input: RecipeInput) {
@@ -23,7 +39,7 @@ export async function createRecipe(input: RecipeInput) {
   const recipe = await prisma.$transaction(async (tx) => {
     const tags = await resolveTags(tx, data.tags);
     const ingredients = await resolveIngredients(tx, data.ingredients);
-    return tx.recipe.create({
+    const created = await tx.recipe.create({
       data: {
         title: data.title,
         description: data.description ?? null,
@@ -41,6 +57,10 @@ export async function createRecipe(input: RecipeInput) {
       },
       select: { id: true },
     });
+    if (data.groupIds?.length) {
+      await setRecipeGroupShares(tx, created.id, user.id, data.groupIds);
+    }
+    return created;
   });
 
   revalidatePath("/");
@@ -62,6 +82,7 @@ export async function updateRecipe(id: string, input: RecipeInput) {
   });
   if (!existing) throw new Error("Recipe not found.");
   assertCanModifyRecipe(user, existing);
+  assertCanShareWithGroups(user, existing.authorId, data.groupIds);
 
   await prisma.$transaction(async (tx) => {
     const tags = await resolveTags(tx, data.tags);
@@ -86,6 +107,9 @@ export async function updateRecipe(id: string, input: RecipeInput) {
         ingredients: { create: ingredients },
       },
     });
+    if (data.groupIds !== undefined) {
+      await setRecipeGroupShares(tx, id, existing.authorId, data.groupIds);
+    }
   });
 
   // After the DB update succeeds, remove files for images that are no longer

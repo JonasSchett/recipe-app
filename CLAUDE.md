@@ -189,12 +189,39 @@ enhancements (PLAN.md §8): image optimization (sharp), serving scaling, URL imp
   rule "a quantity must be a positive number" is stated once rather than in
   both submit handlers.
 - Protected pages guard with `getCurrentUser()` → `redirect("/login")`.
-- **Notes** (`RecipeNote`) are a private notepad, one per (user, recipe) — not a
+- **Notes** (`RecipeNote`) are a notepad, one per (user, recipe) — not a
   comment thread. Anyone who can *view* a recipe may note it, so the guard in
   `actions/notes.ts` is view permission, not ownership. `recipeDetailInclude`
-  takes the viewer's id and scopes the included note by it; that `where` is the
-  only thing keeping notes private, so always pass the **current** user, never
-  a recipe's author.
+  takes the viewer's id and scopes the included note by it — that is always
+  the viewer's **own** note, so pass the **current** user, never a recipe's
+  author. Notes are private by default; the author may share one with
+  everyone who can see the recipe (`visibility: PUBLIC`) and/or with their
+  family groups. Others' shared notes come only from `getSharedNotes`, which
+  checks recipe visibility first — that's what keeps a PUBLIC note on a
+  private recipe contained. No admin bypass. Search still covers only the
+  viewer's own notes. Notes render at the top of the recipe page (under the
+  title, before the description).
+- **Family groups** (`FamilyGroup`): standing circles to share recipes and
+  notes with. Auth funnels through `lib/group-access.ts`; unlike lists, the
+  **owner also has a member row**, which carries their per-group sharing
+  defaults like everyone else's. No admin blanket access; "no such group" and
+  "no access" look identical. Invites mirror lists (link, email/username,
+  pending email invites consumed in the `signIn` event **and** `dev-auth.ts`).
+  `RecipeGroupShare` grants READ via the fourth branch of `visibilityWhere`.
+  Only the recipe's **author** sets group shares (an admin editing omits
+  `groupIds`, leaving them alone). Leaving or being removed runs
+  `withdrawGroupShares`, so nothing stays shared into a group by a non-member.
+- **Sharing defaults** (`User.defaultRecipeVisibility` / `defaultNoteVisibility`,
+  `FamilyGroupMember.shareRecipesByDefault` / `shareNotesByDefault`, all on
+  `/account`) are **form defaults only**: they pre-tick the create form and a
+  new note, and never change anything already saved. The separate "Share
+  existing items" panel below them (`actions/sharing.ts`) is the bulk
+  catch-up: only the caller's **own** items (even for admins); for a group it
+  can also "stop sharing" everything, but there's deliberately no bulk "make
+  everything private" (that would also revert items made public on purpose).
+  For a subset, the batch bar's **Share** panel (`setRecipesSharing` in
+  `actions/batch.ts`) — also own-recipes-only, stricter than the other batch
+  actions, because group sharing is the author's call.
 - **Autocomplete** for ingredient/tag entry: `src/lib/suggest.ts` is the pure
   matcher (fold = lowercase + `ß`→`ss` + diacritics dropped, plus an `ue`-style
   expanded key, so "Kart"/"suss"/"suess" all hit). `getEntityVocabulary()` in

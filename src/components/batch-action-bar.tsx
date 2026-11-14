@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Carrot, CheckSquare, Pin, Plus, Tags, X } from "lucide-react";
+import { Carrot, CheckSquare, Globe, Pin, Plus, Share2, Tags, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,12 @@ import {
   addIngredientsToRecipes,
   addTagsToRecipes,
   getSelectableRecipeIds,
+  setRecipesSharing,
 } from "@/lib/actions/batch";
 import { addRecipesToList } from "@/lib/actions/lists";
 import { useAction } from "@/lib/use-action";
 import type { PinnableList } from "@/components/pin-to-list";
+import type { PickableGroup } from "@/components/group-share-picker";
 import type { EntitySuggestion } from "@/lib/suggest";
 
 /**
@@ -55,6 +57,7 @@ export function BatchActionBar({
   tagVocabulary = [],
   ingredientVocabulary = [],
   pinnableLists = [],
+  groups = [],
   filter,
   totalMatching,
 }: {
@@ -62,13 +65,17 @@ export function BatchActionBar({
   tagVocabulary?: EntitySuggestion[];
   ingredientVocabulary?: EntitySuggestion[];
   pinnableLists?: PinnableList[];
+  /** The user's family groups, for the Share panel. */
+  groups?: PickableGroup[];
   /** The filter currently applied to the list, for "select all matching". */
   filter: { search: string; tagIds: string[]; ingredientIds: string[] };
   /** How many recipes match it in total, across every page. */
   totalMatching: number;
 }) {
   const { active, selected, selectMany, clear, setActive } = useSelection();
-  const [panel, setPanel] = useState<null | "tags" | "ingredients" | "lists">(null);
+  const [panel, setPanel] = useState<
+    null | "tags" | "ingredients" | "lists" | "share"
+  >(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [rows, setRows] = useState<IngredientRow[]>([EMPTY_INGREDIENT_ROW]);
@@ -153,6 +160,32 @@ export function BatchActionBar({
         setMessage(
           `Pinned ${result.added} recipe${result.added === 1 ? "" : "s"} to ${listName}` +
             (result.skipped > 0 ? ` · ${result.skipped} already there` : ""),
+        );
+        closePanel();
+        clear();
+      },
+    });
+  }
+
+  /**
+   * Sharing only touches the user's own recipes (see `setRecipesSharing`), so
+   * "skipped" here means "not yours" even for an admin.
+   */
+  function share(groupId: string | null, on: boolean, audience: string) {
+    setMessage(null);
+    run(() => setRecipesSharing({ recipeIds: [...selected], groupId, share: on }), {
+      failure: "Could not change sharing.",
+      onSuccess: (result) => {
+        const n = `${result.updated} recipe${result.updated === 1 ? "" : "s"}`;
+        setMessage(
+          (groupId === null
+            ? on
+              ? `Made ${n} public`
+              : `Made ${n} private`
+            : on
+              ? `Shared ${n} with ${audience}`
+              : `Stopped sharing ${n} with ${audience}`) +
+            (result.skipped > 0 ? ` · ${result.skipped} skipped (not yours)` : ""),
         );
         closePanel();
         clear();
@@ -340,6 +373,65 @@ export function BatchActionBar({
           </div>
         )}
 
+        {panel === "share" && (
+          <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-2 border-b pb-3">
+            <p className="text-xs text-muted-foreground">
+              Applies to the selected recipes you wrote; others are skipped.
+            </p>
+            <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+              {[{ id: null, name: "Everyone" } as const, ...groups].map((group) => {
+                const Icon = group.id === null ? Globe : Users;
+                return (
+                  <li
+                    key={group.id ?? "everyone"}
+                    className="flex flex-wrap items-center gap-2 rounded-md px-2.5 py-1.5"
+                  >
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {group.name}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => share(group.id, true, group.name)}
+                    >
+                      {group.id === null ? "Make public" : "Share"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={pending}
+                      onClick={() => share(group.id, false, group.name)}
+                    >
+                      {group.id === null ? "Make private" : "Stop sharing"}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+            {groups.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Join or create a family group on the Groups page to share with
+                just the people you cook with.
+              </p>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="self-start"
+              onClick={closePanel}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+        )}
+
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2">
           <span className="text-sm font-medium">
             {count} selected
@@ -384,6 +476,18 @@ export function BatchActionBar({
               disabled={count === 0}
             >
               <Pin className="h-4 w-4" /> Add to list
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMessage(null);
+                setPanel(panel === "share" ? null : "share");
+              }}
+              disabled={count === 0}
+            >
+              <Share2 className="h-4 w-4" /> Share
             </Button>
             <Button
               type="button"

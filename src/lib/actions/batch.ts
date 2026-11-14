@@ -5,10 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, type SessionUser } from "@/lib/auth-guards";
 import {
   batchIngredientsSchema,
+  batchShareSchema,
   batchTagsSchema,
   type BatchIngredientsInput,
+  type BatchShareInput,
   type BatchTagsInput,
 } from "@/lib/validations";
+import { requireGroupPermission } from "@/lib/group-access";
 import { resolveIngredients, resolveTags } from "@/lib/actions/_shared";
 import { getFilteredRecipeIds } from "@/lib/queries";
 
@@ -129,4 +132,51 @@ export async function addIngredientsToRecipes(
 
   revalidateLists();
   return { updated: targets.length, skipped: recipeIds.length - targets.length };
+}
+
+/**
+ * Share or unshare many recipes at once — with everyone (PUBLIC / PRIVATE) or
+ * with one of the caller's groups.
+ *
+ * Stricter than the other batch actions: only the caller's **own** recipes,
+ * even for an admin. Group sharing is the author's call (see `recipes.ts`),
+ * and bulk-publishing other people's recipes is not a power worth having;
+ * anything else counts as skipped, exactly like "not yours" elsewhere.
+ * `updated` is how many of the caller's recipes were targeted, including any
+ * already in the requested state.
+ */
+export async function setRecipesSharing(
+  input: BatchShareInput,
+): Promise<BatchResult> {
+  const user = await requireUser();
+  const { recipeIds, groupId, share } = batchShareSchema.parse(input);
+  if (groupId) await requireGroupPermission(user, groupId, "MEMBER");
+
+  const own = await prisma.recipe.findMany({
+    where: { id: { in: recipeIds }, authorId: user.id },
+    select: { id: true },
+  });
+  const targets = own.map((row) => row.id);
+  const result = { updated: targets.length, skipped: recipeIds.length - targets.length };
+  if (targets.length === 0) return result;
+
+  if (groupId === null) {
+    await prisma.recipe.updateMany({
+      where: { id: { in: targets } },
+      data: { visibility: share ? "PUBLIC" : "PRIVATE" },
+    });
+  } else if (share) {
+    await prisma.recipeGroupShare.createMany({
+      data: targets.map((recipeId) => ({ recipeId, groupId })),
+      skipDuplicates: true,
+    });
+  } else {
+    await prisma.recipeGroupShare.deleteMany({
+      where: { groupId, recipeId: { in: targets } },
+    });
+  }
+
+  // Sharing changes what other people's lists, groups and dashboards show.
+  revalidatePath("/", "layout");
+  return result;
 }
