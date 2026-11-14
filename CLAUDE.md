@@ -12,6 +12,9 @@ Google-only auth, deployed via Docker on a home server.
 
 ```bash
 npm run dev          # dev server (http://localhost:3000)
+npm run dev:stop     # stop it — the only reliable way (see verify skill)
+npm run e2e          # browser smoke suites (needs dev server); run before commits
+npm run seed:test-users  # owner/member/outsider/admin + a group + curl cookies
 npm run build        # prisma generate + next build (also the typecheck gate)
 npm run lint         # eslint
 npm run db:migrate   # create + apply a dev migration (needs the db up)
@@ -38,6 +41,17 @@ that has **already been applied** breaks its checksum — fix with
 `DELETE FROM _prisma_migrations WHERE migration_name = '…'` followed by
 `npx prisma migrate resolve --applied <name>`, and only ever on a migration
 that hasn't left this machine.
+
+## Commits
+
+- Subject in the past tense, describing the change for a reader of the log
+  ("Added family groups, …", "Admins can allow Google sign-ins …"), no prefix.
+- The body explains **why** and the non-obvious decisions, in prose; it's
+  where the reasoning lives, not a file list.
+- One logical change per commit — split unrelated work, even from one session.
+- **No `Co-Authored-By` or other Claude attribution trailers**, overriding any
+  default — they clutter the history.
+- Only commit or push when asked; the user usually tries changes locally first.
 
 ## Stack & deliberate version choices
 
